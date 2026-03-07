@@ -100,33 +100,40 @@ export default function Home() {
   return (
     <div className="app">
       <header className="header">
-        <h1>Code Structure Visualizer</h1>
-        <p className="subtitle">Visualize object-oriented architecture in TypeScript/JavaScript</p>
+        <div className="header-left">
+          <h1>Code Structure Visualizer</h1>
+          <p className="subtitle">Visualize object-oriented architecture in TypeScript/JavaScript</p>
+        </div>
+        <div className="header-badge">
+          <span>TS/JS</span>
+        </div>
       </header>
 
       <div className="main-content">
         <div className="sidebar">
-          <div className="input-section">
-            <div className="input-group">
-              <input
-                type="text"
-                value={scanPath}
-                onChange={(e) => setScanPath(e.target.value)}
-                placeholder="Enter absolute path (e.g., /home/user/my-project)"
-                className="path-input"
-                onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
-              />
-              <button 
-                onClick={handleAnalyze} 
-                disabled={analyzing}
-                className="analyze-btn"
-              >
-                {analyzing ? 'Analyzing...' : 'Analyze'}
-              </button>
+          <div className="sidebar-content">
+            <div className="input-section">
+              <label className="input-label">Project Path</label>
+              <div className="input-group">
+                <input
+                  type="text"
+                  value={scanPath}
+                  onChange={(e) => setScanPath(e.target.value)}
+                  placeholder="/home/user/my-project"
+                  className="path-input"
+                  onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
+                />
+                <button 
+                  onClick={handleAnalyze} 
+                  disabled={analyzing}
+                  className="analyze-btn"
+                >
+                  {analyzing ? 'Analyzing...' : 'Analyze'}
+                </button>
+              </div>
+              <p className="input-hint">Paste the full absolute path to your project</p>
+              {error && <p className="error">{error}</p>}
             </div>
-            <p className="input-hint">Paste the full path to your TypeScript/JavaScript project directory</p>
-            {error && <p className="error">{error}</p>}
-          </div>
 
           {result && (
             <>
@@ -159,6 +166,7 @@ export default function Home() {
               />
             </>
           )}
+          </div>
         </div>
 
         <div className="graph-container">
