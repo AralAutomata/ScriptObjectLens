@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.window"],
+    "strict": true
+  },
+  "tasks": {
+    "start": "deno run --allow-all --watch backend/src/server/server.ts",
+    "cli": "deno run --allow-all backend/src/cli.ts"
+  },
+  "exclude": ["node_modules", "frontend"],
+  "imports": {
+    "typescript": "npm:typescript@^5.9.3"
+  }
+}

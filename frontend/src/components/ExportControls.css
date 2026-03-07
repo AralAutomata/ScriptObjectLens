@@ -1,0 +1,40 @@
+.export-controls {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.export-controls h3 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.export-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.export-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.export-btn:hover {
+  border-color: var(--accent-blue);
+  background: var(--bg-tertiary);
+}
+
+.export-icon {
+  font-size: 14px;
+}

@@ -1,0 +1,159 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.header {
+  padding: 16px 24px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.header h1 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 320px;
+  min-width: 280px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.input-section {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.path-input {
+  flex: 1;
+  padding: 10px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: monospace;
+}
+
+.input-hint {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.path-input:focus {
+  outline: none;
+  border-color: var(--accent-blue);
+}
+
+.path-input::placeholder {
+  color: var(--text-secondary);
+}
+
+.analyze-btn {
+  padding: 10px 16px;
+  background: var(--accent-blue);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.analyze-btn:hover:not(:disabled) {
+  background: #2563eb;
+}
+
+.analyze-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.error {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #ef4444;
+}
+
+.stats {
+  display: flex;
+  padding: 16px;
+  gap: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.stat {
+  flex: 1;
+  text-align: center;
+  padding: 8px;
+  background: var(--bg-primary);
+  border-radius: 6px;
+}
+
+.stat-value {
+  display: block;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--accent-blue);
+}
+
+.stat-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.graph-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+}
+
+.placeholder-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.no-results {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
