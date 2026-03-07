@@ -2,6 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { getEntityDetails, getFileContent } from '@/lib/api';
+import Prism from 'prismjs';
+import 'prismjs/components/prism-typescript';
+import 'prismjs/components/prism-javascript';
+import 'prismjs/themes/prism-tomorrow.css';
 import './NodeDetails.css';
 
 interface ClassInfo {
@@ -22,7 +26,7 @@ interface ClassInfo {
 interface GraphNode {
   id: string;
   label: string;
-  type: 'class' | 'interface';
+  type: 'class' | 'interface' | 'abstract';
   namespace: string;
   filePath: string;
 }
@@ -44,6 +48,31 @@ export default function NodeDetails({ node, result, onClose }: NodeDetailsProps)
   const [relationships, setRelationships] = useState<any[]>([]);
   const [codeContent, setCodeContent] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'details' | 'code'>('details');
+  const [panelWidth, setPanelWidth] = useState(400);
+  const [isResizing, setIsResizing] = useState(false);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isResizing) {
+        const newWidth = window.innerWidth - e.clientX;
+        setPanelWidth(Math.max(300, Math.min(800, newWidth)));
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
 
   useEffect(() => {
     const info = result.classes.find(c => c.id === node.id);
@@ -76,7 +105,11 @@ export default function NodeDetails({ node, result, onClose }: NodeDetailsProps)
   if (!classInfo) return null;
 
   return (
-    <div className="node-details">
+    <div className="node-details" style={{ width: panelWidth }}>
+      <div 
+        className="resize-handle"
+        onMouseDown={() => setIsResizing(true)}
+      />
       <div className="details-header">
         <div className="header-info">
           <span className={`type-badge ${classInfo.type}`}>
@@ -182,7 +215,18 @@ export default function NodeDetails({ node, result, onClose }: NodeDetailsProps)
       {activeTab === 'code' && (
         <div className="code-content">
           {codeContent ? (
-            <pre><code>{codeContent}</code></pre>
+            <pre>
+              <code 
+                className="language-typescript"
+                dangerouslySetInnerHTML={{
+                  __html: Prism.highlight(
+                    codeContent,
+                    Prism.languages.typescript || Prism.languages.javascript,
+                    'typescript'
+                  )
+                }}
+              />
+            </pre>
           ) : (
             <p className="no-code">Source code not available</p>
           )}

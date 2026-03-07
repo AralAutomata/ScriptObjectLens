@@ -5,8 +5,8 @@ import './SearchBar.css';
 interface SearchBarProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  filterType: 'all' | 'class' | 'interface';
-  onFilterChange: (type: 'all' | 'class' | 'interface') => void;
+  filterType: 'all' | 'class' | 'interface' | 'abstract';
+  onFilterChange: (type: 'all' | 'class' | 'interface' | 'abstract') => void;
 }
 
 export default function SearchBar({ searchQuery, onSearchChange, filterType, onFilterChange }: SearchBarProps) {
@@ -16,7 +16,7 @@ export default function SearchBar({ searchQuery, onSearchChange, filterType, onF
         type="text"
         value={searchQuery}
         onChange={(e) => onSearchChange(e.target.value)}
-        placeholder="Search classes..."
+        placeholder="Search classes, interfaces..."
         className="search-input"
       />
       <div className="filter-buttons">
@@ -30,13 +30,19 @@ export default function SearchBar({ searchQuery, onSearchChange, filterType, onF
           className={`filter-btn class ${filterType === 'class' ? 'active' : ''}`}
           onClick={() => onFilterChange('class')}
         >
-          Classes
+          🔵 Class
+        </button>
+        <button
+          className={`filter-btn abstract ${filterType === 'abstract' ? 'active' : ''}`}
+          onClick={() => onFilterChange('abstract')}
+        >
+          🟠 Abstract
         </button>
         <button
           className={`filter-btn interface ${filterType === 'interface' ? 'active' : ''}`}
           onClick={() => onFilterChange('interface')}
         >
-          Interfaces
+          🟢 Interface
         </button>
       </div>
     </div>

@@ -8,12 +8,30 @@ import SearchBar from '@/components/SearchBar';
 import ExportControls from '@/components/ExportControls';
 import './page.css';
 
+interface ClassMethod {
+  name: string;
+  parameters: { name: string; type: string }[];
+  returnType: string;
+}
+
+interface ClassProperty {
+  name: string;
+  type: string;
+}
+
 interface GraphNode {
   id: string;
   label: string;
-  type: 'class' | 'interface';
+  type: 'class' | 'interface' | 'abstract';
   namespace: string;
   filePath: string;
+  extends?: string;
+  implements: string[];
+  methods: ClassMethod[];
+  properties: ClassProperty[];
+  methodCount: number;
+  propertyCount: number;
+  inheritanceDepth: number;
   x?: number;
   y?: number;
   fx?: number | null;
@@ -23,7 +41,8 @@ interface GraphNode {
 interface GraphEdge {
   source: string | GraphNode;
   target: string | GraphNode;
-  type: 'extends' | 'implements' | 'composition';
+  type: 'extends' | 'implements' | 'composition' | 'uses';
+  label?: string;
 }
 
 interface AnalysisResult {
@@ -47,7 +66,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'class' | 'interface'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'class' | 'interface' | 'abstract'>('all');
 
   const handleAnalyze = async () => {
     if (!scanPath.trim()) {
@@ -63,7 +82,54 @@ export default function Home() {
       const response: AnalyzeResponse = await analyzeProject({ path: scanPath });
       
       if (response.success && response.result) {
-        setResult(response.result as AnalysisResult);
+        // Transform data to include OOP metadata
+        const classes = response.result.classes || [];
+        const relationships = response.result.relationships || [];
+        
+        // Calculate inheritance depth for each class
+        const calculateDepth = (classId: string, visited: Set<string> = new Set()): number => {
+          if (visited.has(classId)) return 0;
+          visited.add(classId);
+          
+          const extendsRel = relationships.find((r: any) => r.source === classId && r.type === 'extends');
+          if (extendsRel) {
+            return 1 + calculateDepth(extendsRel.target, visited);
+          }
+          return 0;
+        };
+        
+        // Build enhanced graph data
+        const enhancedNodes: GraphNode[] = classes.map((c: any) => ({
+          id: c.id,
+          label: c.name,
+          type: c.type === 'abstract' ? 'abstract' : c.type === 'interface' ? 'interface' : 'class',
+          namespace: c.namespace || '',
+          filePath: c.filePath,
+          extends: c.extends,
+          implements: c.implements || [],
+          methods: c.methods || [],
+          properties: c.properties || [],
+          methodCount: (c.methods || []).length,
+          propertyCount: (c.properties || []).length,
+          inheritanceDepth: calculateDepth(c.id)
+        }));
+        
+        const enhancedEdges: GraphEdge[] = relationships.map((r: any) => ({
+          source: r.source,
+          target: r.target,
+          type: r.type,
+          label: r.type
+        }));
+        
+        const enhancedResult: AnalysisResult = {
+          ...response.result as AnalysisResult,
+          graph: {
+            nodes: enhancedNodes,
+            edges: enhancedEdges
+          }
+        };
+        
+        setResult(enhancedResult);
       } else {
         setError(response.error || 'Analysis failed');
       }
@@ -80,7 +146,11 @@ export default function Home() {
     let nodes = result.graph.nodes;
     
     if (filterType !== 'all') {
-      nodes = nodes.filter(n => n.type === filterType);
+      if (filterType === 'abstract') {
+        nodes = nodes.filter(n => n.type === 'abstract');
+      } else {
+        nodes = nodes.filter(n => n.type === filterType);
+      }
     }
     
     if (searchQuery.trim()) {

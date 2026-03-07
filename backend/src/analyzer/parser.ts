@@ -175,7 +175,13 @@ export class TypeScriptParser {
     const implementsNames = implementsClause?.types.map(t => this.getTextWithType(t, sourceFile)) || [];
 
     const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
-    const isAbstract = modifiers?.some(m => m.kind === ts.SyntaxKind.AbstractKeyword) || false;
+    const hasAbstractKeyword = modifiers?.some(m => m.kind === ts.SyntaxKind.AbstractKeyword) || false;
+    
+    // Also detect abstract by naming convention (Base, Abstract prefixes)
+    const isAbstractByName = /^Base|^Abstract/.test(name);
+    
+    // Class is abstract if it has abstract keyword OR follows naming convention
+    const isAbstract = hasAbstractKeyword || isAbstractByName;
 
     const methods = this.extractMethods(node, sourceFile);
     const properties = this.extractProperties(node, sourceFile);

@@ -5,7 +5,7 @@ import './ExportControls.css';
 interface GraphNode {
   id: string;
   label: string;
-  type: 'class' | 'interface';
+  type: 'class' | 'interface' | 'abstract';
 }
 
 interface ExportControlsProps {
