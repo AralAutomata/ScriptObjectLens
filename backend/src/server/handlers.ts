@@ -3,6 +3,8 @@ import { RelationshipMapper } from "../analyzer/relationship-mapper.ts";
 import { analyzeFileGraph } from "../analyzer/file-analyzer.ts";
 import { analyzeRouteTree } from "../analyzer/route-analyzer.ts";
 import { analyzeDatabaseSchema } from "../analyzer/schema-analyzer.ts";
+import { DiffAnalyzer } from "../git/diff-analyzer.ts";
+import { GitClient } from "../git/git-client.ts";
 import {
   AnalysisResult,
   AnalyzeRequest,
@@ -11,7 +13,10 @@ import {
   ClassInfo,
   FileGraphResponse,
   RouteTreeResponse,
-  DatabaseSchemaResponse
+  DatabaseSchemaResponse,
+  ArchitectureDiffRequest,
+  ArchitectureDiffResponse,
+  GitRefsResponse
 } from "../shared/types.ts";
 
 const parser = new TypeScriptParser();
@@ -215,6 +220,54 @@ export async function getDatabaseSchema(scanPath: string): Promise<DatabaseSchem
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to analyze database schema"
+    };
+  }
+}
+
+export async function analyzeArchitectureDiff(
+  request: ArchitectureDiffRequest
+): Promise<ArchitectureDiffResponse> {
+  try {
+    const pathValidation = validatePath(request.path);
+    if (!pathValidation.valid) {
+      return { success: false, error: pathValidation.error };
+    }
+
+    const diffAnalyzer = new DiffAnalyzer();
+    const result = await diffAnalyzer.analyzeDiff(request.path, request.from, request.to);
+
+    return result;
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to analyze architecture diff"
+    };
+  }
+}
+
+export async function getGitRefs(scanPath: string): Promise<GitRefsResponse> {
+  try {
+    const pathValidation = validatePath(scanPath);
+    if (!pathValidation.valid) {
+      return { success: false, error: pathValidation.error };
+    }
+
+    const git = new GitClient(scanPath);
+    const isValid = await git.isValidRepository();
+    if (!isValid) {
+      return { success: false, error: "Not a valid git repository" };
+    }
+
+    const [branches, tags] = await Promise.all([
+      git.getBranches(),
+      git.getTags()
+    ]);
+
+    return { success: true, branches, tags };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to get git refs"
     };
   }
 }

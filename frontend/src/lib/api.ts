@@ -152,3 +152,104 @@ export async function fetchDatabaseSchema(path: string): Promise<DatabaseSchemaR
   const response = await fetch(`${API_BASE}/schema?path=${encodeURIComponent(path)}`);
   return response.json();
 }
+
+// ============================================
+// Architecture Diff API
+// ============================================
+
+export interface GitRef {
+  name: string;
+  type: 'branch' | 'tag' | 'commit';
+  hash: string;
+}
+
+export interface EntityChange {
+  id: string;
+  name: string;
+  type: 'class' | 'interface' | 'abstract' | 'enum' | 'typeAlias' | 'function';
+  status: 'added' | 'removed' | 'modified';
+  filePath?: string;
+  changes?: {
+    methodsAdded?: string[];
+    methodsRemoved?: string[];
+    propertiesAdded?: string[];
+    propertiesRemoved?: string[];
+    extendsChanged?: { from?: string; to?: string };
+    implementsChanged?: { added: string[]; removed: string[] };
+  };
+}
+
+export interface RelationshipChange {
+  source: string;
+  target: string;
+  type: 'extends' | 'implements' | 'composition' | 'uses' | 'imports';
+  status: 'added' | 'removed';
+}
+
+export interface ImpactAnalysis {
+  directDependencies: string[];
+  brokenRelationships: number;
+  newRelationships: number;
+}
+
+export interface ArchitectureDiff {
+  from: GitRef;
+  to: GitRef;
+  entities: {
+    added: EntityChange[];
+    removed: EntityChange[];
+    modified: EntityChange[];
+  };
+  relationships: {
+    added: RelationshipChange[];
+    removed: RelationshipChange[];
+  };
+  files: {
+    added: string[];
+    removed: string[];
+    modified: string[];
+  };
+  impact: ImpactAnalysis;
+  summary: {
+    totalChanges: number;
+    entitiesAdded: number;
+    entitiesRemoved: number;
+    entitiesModified: number;
+    relationshipsAdded: number;
+    relationshipsRemoved: number;
+    filesChanged: number;
+  };
+  beforeSnapshot: any;
+  afterSnapshot: any;
+}
+
+export interface ArchitectureDiffResponse {
+  success: boolean;
+  data?: ArchitectureDiff;
+  error?: string;
+}
+
+export interface GitRefsResponse {
+  success: boolean;
+  branches?: GitRef[];
+  tags?: GitRef[];
+  error?: string;
+}
+
+export async function fetchArchitectureDiff(
+  path: string,
+  from: string,
+  to: string
+): Promise<ArchitectureDiffResponse> {
+  const response = await fetch(`${API_BASE}/arch-diff`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, from, to }),
+  });
+  return response.json();
+}
+
+export async function fetchGitRefs(path: string): Promise<GitRefsResponse> {
+  const response = await fetch(`${API_BASE}/git-refs?path=${encodeURIComponent(path)}`);
+  return response.json();
+}

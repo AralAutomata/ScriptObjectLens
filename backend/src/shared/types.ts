@@ -202,3 +202,117 @@ export interface DatabaseSchemaResponse {
   data?: DatabaseSchema;
   error?: string;
 }
+
+// ============================================
+// Architecture Diff Types
+// ============================================
+
+// Git reference (branch, commit, tag)
+export interface GitRef {
+  name: string;
+  type: 'branch' | 'tag' | 'commit';
+  hash: string;
+}
+
+// Entity-level changes
+export interface EntityChange {
+  id: string;
+  name: string;
+  type: EntityType;
+  status: 'added' | 'removed' | 'modified';
+  filePath?: string;
+  changes?: {
+    methodsAdded?: string[];
+    methodsRemoved?: string[];
+    propertiesAdded?: string[];
+    propertiesRemoved?: string[];
+    extendsChanged?: { from?: string; to?: string };
+    implementsChanged?: { added: string[]; removed: string[] };
+  };
+}
+
+// Relationship changes
+export interface RelationshipChange {
+  source: string;
+  target: string;
+  type: Relationship['type'];
+  status: 'added' | 'removed';
+}
+
+// File-level changes
+export interface FileChange {
+  path: string;
+  status: 'added' | 'removed' | 'modified';
+}
+
+// Impact analysis
+export interface ImpactAnalysis {
+  directDependencies: string[];
+  brokenRelationships: number;
+  newRelationships: number;
+}
+
+// Complete diff result
+export interface ArchitectureDiff {
+  from: GitRef;
+  to: GitRef;
+
+  // Entity changes
+  entities: {
+    added: EntityChange[];
+    removed: EntityChange[];
+    modified: EntityChange[];
+  };
+
+  // Relationship changes
+  relationships: {
+    added: RelationshipChange[];
+    removed: RelationshipChange[];
+  };
+
+  // File changes
+  files: {
+    added: string[];
+    removed: string[];
+    modified: string[];
+  };
+
+  // Impact analysis
+  impact: ImpactAnalysis;
+
+  // Summary statistics
+  summary: {
+    totalChanges: number;
+    entitiesAdded: number;
+    entitiesRemoved: number;
+    entitiesModified: number;
+    relationshipsAdded: number;
+    relationshipsRemoved: number;
+    filesChanged: number;
+  };
+
+  // Snapshots for visualization
+  beforeSnapshot: AnalysisResult;
+  afterSnapshot: AnalysisResult;
+}
+
+// API Request/Response for Architecture Diff
+export interface ArchitectureDiffRequest {
+  path: string;
+  from: string;
+  to: string;
+}
+
+export interface ArchitectureDiffResponse {
+  success: boolean;
+  data?: ArchitectureDiff;
+  error?: string;
+}
+
+// API Request/Response for Git Refs
+export interface GitRefsResponse {
+  success: boolean;
+  branches?: GitRef[];
+  tags?: GitRef[];
+  error?: string;
+}

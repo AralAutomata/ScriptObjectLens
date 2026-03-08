@@ -1,11 +1,13 @@
-import { 
-  analyzeProject, 
-  getAnalysisResult, 
-  getEntityDetails, 
+import {
+  analyzeProject,
+  getAnalysisResult,
+  getEntityDetails,
   getFileContent,
   getFileGraph,
   getRouteTree,
-  getDatabaseSchema
+  getDatabaseSchema,
+  analyzeArchitectureDiff,
+  getGitRefs
 } from "./handlers.ts";
 
 interface Route {
@@ -301,7 +303,97 @@ const routes: Route[] = [
       }
       
       const result = await getDatabaseSchema(scanPath);
-      
+
+      return new Response(JSON.stringify(result), {
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+        status: result.success ? 200 : 400
+      });
+    }
+  },
+  {
+    method: "POST",
+    path: "/api/arch-diff",
+    handler: async (req: Request) => {
+      const corsHeaders = createCorsHeaders();
+
+      try {
+        const body = await req.json();
+
+        if (!body || typeof body !== "object") {
+          return new Response(JSON.stringify({ success: false, error: "Invalid request body" }), {
+            headers: { "Content-Type": "application/json", ...corsHeaders },
+            status: 400
+          });
+        }
+
+        const obj = body as Record<string, unknown>;
+
+        if (!obj.path || typeof obj.path !== "string") {
+          return new Response(JSON.stringify({ success: false, error: "Path is required" }), {
+            headers: { "Content-Type": "application/json", ...corsHeaders },
+            status: 400
+          });
+        }
+
+        if (!obj.from || typeof obj.from !== "string") {
+          return new Response(JSON.stringify({ success: false, error: "'from' ref is required" }), {
+            headers: { "Content-Type": "application/json", ...corsHeaders },
+            status: 400
+          });
+        }
+
+        if (!obj.to || typeof obj.to !== "string") {
+          return new Response(JSON.stringify({ success: false, error: "'to' ref is required" }), {
+            headers: { "Content-Type": "application/json", ...corsHeaders },
+            status: 400
+          });
+        }
+
+        const result = await analyzeArchitectureDiff({
+          path: obj.path,
+          from: obj.from,
+          to: obj.to
+        });
+
+        return new Response(JSON.stringify(result), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: result.success ? 200 : 400
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: e instanceof Error ? e.message : "Internal server error"
+        }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 500
+        });
+      }
+    }
+  },
+  {
+    method: "GET",
+    path: "/api/git-refs",
+    handler: async (req: Request) => {
+      const corsHeaders = createCorsHeaders();
+      const url = new URL(req.url);
+      const scanPath = url.searchParams.get("path");
+
+      if (!scanPath) {
+        return new Response(JSON.stringify({ success: false, error: "Path parameter is required" }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 400
+        });
+      }
+
+      if (scanPath.length > 4096) {
+        return new Response(JSON.stringify({ success: false, error: "Path too long" }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 400
+        });
+      }
+
+      const result = await getGitRefs(scanPath);
+
       return new Response(JSON.stringify(result), {
         headers: { "Content-Type": "application/json", ...corsHeaders },
         status: result.success ? 200 : 400

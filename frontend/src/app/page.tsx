@@ -9,6 +9,7 @@ import ExportControls from '@/components/ExportControls';
 import FileGraph from '@/components/FileGraph';
 import RouteTree from '@/components/RouteTree';
 import DatabaseSchema from '@/components/DatabaseSchema';
+import ArchitectureDiffView from '@/components/ArchitectureDiff';
 import './page.css';
 
 type NodeType = 'class' | 'interface' | 'abstract' | 'enum' | 'typeAlias' | 'function';
@@ -16,7 +17,7 @@ type RelationFilter = 'all' | 'inheritance' | 'dependency' | 'imports';
 type DegreeFilter = 'all' | 'high' | 'cycle';
 type EdgeType = 'extends' | 'implements' | 'composition' | 'uses' | 'imports';
 type ViewMode = 'graph' | 'clusters';
-type ActiveTab = 'classes' | 'filegraph' | 'routes' | 'schema';
+type ActiveTab = 'classes' | 'filegraph' | 'routes' | 'schema' | 'diff';
 
 interface FileGraphData {
   nodes: any[];
@@ -139,6 +140,7 @@ export default function Home() {
     filegraph: false,
     routes: false,
     schema: false,
+    diff: false,
   });
 
   const isHighDegree = (node: GraphNode): boolean => ((node.inDegree || 0) + (node.outDegree || 0)) >= 3;
@@ -559,6 +561,12 @@ export default function Home() {
                   DB Schema
                   {tabLoading.schema && <span className="tab-spinner" />}
                 </button>
+                <button
+                  className={`tab-button ${activeTab === 'diff' ? 'active' : ''}`}
+                  onClick={() => handleTabChange('diff')}
+                >
+                  Architecture Diff
+                </button>
               </div>
 
               <div className="tab-content-wrapper">
@@ -697,6 +705,10 @@ export default function Home() {
                       </div>
                     )}
                   </>
+                )}
+
+                {activeTab === 'diff' && (
+                  <ArchitectureDiffView path={scanPath} />
                 )}
               </div>
             </div>
