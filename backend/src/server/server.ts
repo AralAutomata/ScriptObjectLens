@@ -467,12 +467,17 @@ async function handleRequest(req: Request): Promise<Response> {
 
 export function startServer(port: number = 8000): void {
   console.log(`Starting server on http://localhost:${port}`);
-  
+
   Deno.serve({
     port,
     hostname: "127.0.0.1",
     handler: handleRequest
   });
-  
+
   console.log(`API server running at http://localhost:${port}`);
+}
+
+// Start the server when run directly (not when imported)
+if (import.meta.main) {
+  startServer();
 }

@@ -4,8 +4,8 @@
     "strict": true
   },
   "tasks": {
-    "start": "deno run --allow-read --allow-net --allow-env --watch backend/src/server/server.ts",
-    "cli": "deno run --allow-read --allow-net --allow-env backend/src/cli.ts"
+    "start": "deno run --allow-read --allow-write --allow-net --allow-env --allow-run --watch backend/src/server/server.ts",
+    "cli": "deno run --allow-read --allow-write --allow-net --allow-env --allow-run backend/src/cli.ts"
   },
   "exclude": ["node_modules", "frontend"],
   "imports": {
