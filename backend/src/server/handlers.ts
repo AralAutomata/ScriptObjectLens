@@ -34,7 +34,7 @@ function validatePath(path: string): { valid: boolean; error?: string } {
   
   normalizedPath = normalizedPath.replace(/%2e%2e/gi, "..")
                                 .replace(/%252e/gi, "..")
-                                .replace(/\.\./gi, "..");
+                                .replace(/\.\./g, "..");
 
   normalizedPath = normalizedPath.replace(/\/+/g, "/");
 
@@ -69,14 +69,14 @@ function cleanupCache(): void {
 export async function analyzeProject(request: AnalyzeRequest): Promise<AnalyzeResponse> {
   try {
     const scanPath = request.path;
-    
+
     const pathValidation = validatePath(scanPath);
     if (!pathValidation.valid) {
       return { success: false, error: pathValidation.error };
     }
-    
+
     cleanupCache();
-    
+
     await parser.parseDirectory(scanPath, {
       exclude: request.exclude,
       include: request.include
@@ -87,7 +87,7 @@ export async function analyzeProject(request: AnalyzeRequest): Promise<AnalyzeRe
     const graph = mapper.buildGraphData(classes, relationships);
 
     const resolvedPath = Deno.realPathSync(scanPath);
-    
+
     const result: AnalysisResult = {
       id: crypto.randomUUID(),
       timestamp: Date.now(),
@@ -96,8 +96,12 @@ export async function analyzeProject(request: AnalyzeRequest): Promise<AnalyzeRe
       relationships,
       graph,
       totalFiles: parser["sourceFiles"]?.size || 0,
-      totalClasses: classes.filter(c => c.type === "class").length,
-      totalInterfaces: classes.filter(c => c.type === "interface").length
+      totalClasses: classes.filter(c => c.type === "class" || c.type === "abstract").length,
+      totalInterfaces: classes.filter(c => c.type === "interface").length,
+      totalEnums: classes.filter(c => c.type === "enum").length,
+      totalTypeAliases: classes.filter(c => c.type === "typeAlias").length,
+      totalFunctions: classes.filter(c => c.type === "function").length,
+      totalEntities: classes.length
     };
 
     analysisCache.set(result.id, result);
@@ -112,12 +116,12 @@ export async function analyzeProject(request: AnalyzeRequest): Promise<AnalyzeRe
   }
 }
 
-export function getAnalysisResult(id: string): AnalysisResult | undefined {
-  return analysisCache.get(id);
-}
-
 export function getAllAnalyses(): AnalysisResult[] {
   return Array.from(analysisCache.values());
+}
+
+export function getAnalysisResult(id: string): AnalysisResult | undefined {
+  return analysisCache.get(id);
 }
 
 export function getEntityDetails(classId: string): EntityDetails | null {
@@ -137,23 +141,23 @@ export function getFileContent(analysisId: string, filePath: string): string | n
   if (!pathValidation.valid) {
     return null;
   }
-  
+
   const basePath = analysisBasePaths.get(analysisId);
   if (!basePath) {
     return null;
   }
-  
+
   try {
     const resolvedFilePath = Deno.realPathSync(filePath);
     const normalizedBasePath = basePath.replace(/\\/g, "/");
     const normalizedFilePath = resolvedFilePath.replace(/\\/g, "/");
-    
+
     if (!normalizedFilePath.startsWith(normalizedBasePath + "/") && normalizedFilePath !== normalizedBasePath) {
       return null;
     }
   } catch {
     return null;
   }
-  
+
   return parser.getSourceFileContent(filePath);
 }

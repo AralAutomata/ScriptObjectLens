@@ -14,7 +14,7 @@ interface ClassInfo {
   name: string;
   namespace: string;
   filePath: string;
-  type: 'class' | 'interface' | 'abstract';
+  type: 'class' | 'interface' | 'abstract' | 'enum' | 'typeAlias' | 'function';
   methods: any[];
   properties: any[];
   decorators: any[];
@@ -27,7 +27,7 @@ interface ClassInfo {
 interface GraphNode {
   id: string;
   label: string;
-  type: 'class' | 'interface' | 'abstract';
+  type: 'class' | 'interface' | 'abstract' | 'enum' | 'typeAlias' | 'function';
   namespace: string;
   filePath: string;
 }
@@ -52,6 +52,15 @@ export default function NodeDetails({ node, result, analysisId, onClose }: NodeD
   const [activeTab, setActiveTab] = useState<'details' | 'code'>('details');
   const [panelWidth, setPanelWidth] = useState(400);
   const [isResizing, setIsResizing] = useState(false);
+
+  const getTypeLabel = (type: ClassInfo['type']) => {
+    if (type === 'typeAlias') return 'Type';
+    if (type === 'function') return 'Function';
+    if (type === 'enum') return 'Enum';
+    if (type === 'abstract') return 'Abstract';
+    if (type === 'interface') return 'Interface';
+    return 'Class';
+  };
 
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -91,7 +100,10 @@ export default function NodeDetails({ node, result, analysisId, onClose }: NodeD
         if (r.source === node.id) relatedIds.add(r.target);
         if (r.target === node.id) relatedIds.add(r.source);
       });
-      setRelatedClasses(result.classes.filter(c => relatedIds.has(c.id)));
+      const dedupedRelated = Array.from(new Map(
+        result.classes.filter(c => relatedIds.has(c.id)).map((c) => [c.id, c] as const)
+      ).values());
+      setRelatedClasses(dedupedRelated);
 
       getFileContent(analysisId, info.filePath).then(res => {
         if (res.success && res.content) {
@@ -104,6 +116,20 @@ export default function NodeDetails({ node, result, analysisId, onClose }: NodeD
     }
   }, [node, result]);
 
+  const uniqueImplements = classInfo ? Array.from(new Set(classInfo.implements)) : [];
+  const uniqueProperties = classInfo
+    ? classInfo.properties.map((property, index) => ({
+        ...property,
+        __key: `${property.name}|${property.type}|${index}`
+      }))
+    : [];
+  const uniqueMethods = classInfo
+    ? classInfo.methods.map((method, index) => ({
+        ...method,
+        __key: `${method.name}|${method.returnType}|${method.parameters.length}|${index}`
+      }))
+    : [];
+
   if (!classInfo) return null;
 
   return (
@@ -115,7 +141,7 @@ export default function NodeDetails({ node, result, analysisId, onClose }: NodeD
       <div className="details-header">
         <div className="header-info">
           <span className={`type-badge ${classInfo.type}`}>
-            {classInfo.type === 'interface' ? 'Interface' : classInfo.type === 'abstract' ? 'Abstract' : 'Class'}
+            {getTypeLabel(classInfo.type)}
           </span>
           <h2>{classInfo.name}</h2>
         </div>
@@ -155,8 +181,8 @@ export default function NodeDetails({ node, result, analysisId, onClose }: NodeD
                   <span className="rel-name">{classInfo.extends}</span>
                 </p>
               )}
-              {classInfo.implements.map(imp => (
-                <p key={imp} className="relationship">
+              {uniqueImplements.map((imp, index) => (
+                <p key={`${imp}-${index}`} className="relationship">
                   <span className="rel-type">implements</span>
                   <span className="rel-name">{imp}</span>
                 </p>
@@ -168,8 +194,8 @@ export default function NodeDetails({ node, result, analysisId, onClose }: NodeD
             <section className="detail-section">
               <h3>Properties ({classInfo.properties.length})</h3>
               <ul className="member-list">
-                {classInfo.properties.map((prop, i) => (
-                  <li key={i} className="member">
+                {uniqueProperties.map((prop) => (
+                  <li key={prop.__key} className="member">
                     <span className="member-access">{prop.accessModifier || ''}</span>
                     <span className="member-name">{prop.name}</span>
                     <span className="member-type">{prop.type}</span>
@@ -184,8 +210,8 @@ export default function NodeDetails({ node, result, analysisId, onClose }: NodeD
             <section className="detail-section">
               <h3>Methods ({classInfo.methods.length})</h3>
               <ul className="member-list">
-                {classInfo.methods.map((method, i) => (
-                  <li key={i} className="member">
+                {uniqueMethods.map((method) => (
+                  <li key={method.__key} className="member">
                     <span className="member-access">{method.accessModifier || ''}</span>
                     <span className="member-name">{method.name}</span>
                     <span className="member-params">
@@ -202,8 +228,8 @@ export default function NodeDetails({ node, result, analysisId, onClose }: NodeD
             <section className="detail-section">
               <h3>Related Classes</h3>
               <ul className="related-list">
-                {relatedClasses.map(rc => (
-                  <li key={rc.id}>
+                {relatedClasses.map((rc, index) => (
+                  <li key={`${rc.id}-${index}`}>
                     <span className={`related-type ${rc.type}`}>{rc.type[0].toUpperCase()}</span>
                     {rc.name}
                   </li>

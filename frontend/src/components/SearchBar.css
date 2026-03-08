@@ -26,10 +26,12 @@
 .filter-buttons {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .filter-btn {
   flex: 1;
+  min-width: 56px;
   padding: 6px 8px;
   background: var(--bg-primary);
   border: 1px solid var(--border-color);
@@ -64,4 +66,50 @@
   background: rgba(34, 197, 94, 0.2);
   color: var(--accent-green);
   border-color: var(--accent-green);
+}
+
+.filter-btn.enum.active {
+  background: rgba(168, 85, 247, 0.18);
+  color: rgb(196, 181, 253);
+  border-color: rgba(168, 85, 247, 0.8);
+}
+
+.filter-btn.typealias.active {
+  background: rgba(20, 184, 166, 0.18);
+  color: rgb(94, 234, 212);
+  border-color: rgba(20, 184, 166, 0.8);
+}
+
+.filter-btn.fn.active {
+  background: rgba(14, 165, 233, 0.18);
+  color: rgb(103, 232, 249);
+  border-color: rgba(14, 165, 233, 0.8);
+}
+
+.relation-group {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.relation-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-width: 104px;
+}
+
+.relation-select {
+  flex: 1;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+}
+
+.relation-select:focus {
+  outline: none;
+  border-color: var(--accent-blue);
 }

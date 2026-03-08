@@ -37,15 +37,17 @@ export class TypeScriptParser {
   private program: ts.Program | null = null;
   private typeChecker: ts.TypeChecker | null = null;
   private sourceFiles: Map<string, ts.SourceFile> = new Map();
+  private fileImports: Map<string, string[]> = new Map();
   private scanPath: string = "";
 
   async parseDirectory(dirPath: string, options?: {
     exclude?: string[];
     include?: string[];
   }): Promise<void> {
-    // Resolve to absolute path
     this.scanPath = Deno.realPathSync(dirPath);
-    
+    this.sourceFiles.clear();
+    this.fileImports.clear();
+
     let compilerOptions: ts.CompilerOptions = {
       target: ts.ScriptTarget.ES2020,
       module: ts.ModuleKind.ESNext,
@@ -77,10 +79,10 @@ export class TypeScriptParser {
     const defaultIncludes = ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx"];
     const includes = options?.include || defaultIncludes;
     const excludes = [
-      "node_modules", 
-      "dist", 
-      "build", 
-      ".git", 
+      "node_modules",
+      "dist",
+      "build",
+      ".git",
       ".cache",
       "deno",
       ".next",
@@ -90,93 +92,159 @@ export class TypeScriptParser {
     ];
 
     const fileNames = await this.findFiles(dirPath, includes, excludes);
-    
+
     if (fileNames.length === 0) {
       console.warn("No TypeScript/JavaScript files found in the specified directory.");
     }
 
     this.program = ts.createProgram(fileNames, compilerOptions);
     this.typeChecker = this.program.getTypeChecker();
-    
-    // Store all source files from user directory
+
     const scanDir = this.scanPath.replace(/\\/g, '/');
     this.program.getSourceFiles().forEach(sf => {
       const sfPath = sf.fileName.replace(/\\/g, '/');
       if (sfPath.startsWith(scanDir)) {
         this.sourceFiles.set(sf.fileName, sf);
+        this.fileImports.set(sf.fileName, this.extractImportsFromSourceFile(sf));
       }
     });
   }
 
   private async findFiles(dirPath: string, includes: string[], excludes: string[]): Promise<string[]> {
     const files: string[] = [];
-    const basePath = Deno.realPathSync(dirPath);
-    
+    const scanRoot = Deno.realPathSync(dirPath).replace(/\\/g, '/');
+    const normalizedIncludes = includes.map(p =>
+      p.replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/^\/+/, '')
+    );
+    const normalizedExcludes = excludes.map(p => p.replace(/\\/g, '/'));
+
+    const globToRegExp = (glob: string): RegExp => {
+      const hasGlobMeta = /[*?]/.test(glob);
+      const escaped = glob.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+      const isDirectoryOnlyPattern = glob.endsWith('/');
+
+      if (!hasGlobMeta) {
+        const exact = escaped.endsWith('/') ? escaped.slice(0, -1) : escaped;
+        return new RegExp(`(?:^|/)${exact}(?:/.*)?$`);
+      }
+
+      const segments = glob.split('/').filter(segment => segment.length > 0);
+      const segmentToRegex = (segment: string): string => {
+        const escapedSegment = segment.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+        return escapedSegment
+          .replace(/\*/g, '[^/]*')
+          .replace(/\?/g, '[^/]');
+      };
+
+      const regexSource = '^' + segments.map((segment, index) => {
+        if (segment === '**') return '(?:[^/]+/)*';
+        const current = segmentToRegex(segment);
+        return index === segments.length - 1 ? current : `${current}/`;
+      }).join('') + (isDirectoryOnlyPattern ? '.*$' : '$');
+
+      return new RegExp(regexSource);
+    };
+
+    const includeMatchers = normalizedIncludes.map((pattern) => {
+      const regex = globToRegExp(pattern);
+      return { pattern, regex };
+    });
+
+    const shouldInclude = (path: string): boolean => {
+      const normalizedPath = path.replace(/\\/g, '/');
+      const isSourceExt = /\.(ts|tsx|js|jsx)$/.test(normalizedPath);
+      const isExcluded = normalizedExcludes.some(exc => normalizedPath.includes(exc));
+      if (!isSourceExt || isExcluded) {
+        return false;
+      }
+
+      const relativePath = normalizedPath.startsWith(scanRoot)
+        ? normalizedPath.slice(scanRoot.length).replace(/^\/+/, '')
+        : normalizedPath;
+
+      return includeMatchers.some(({ regex }) => regex.test(relativePath));
+    };
+
     const walkDir = async (dir: string) => {
       try {
         for await (const entry of Deno.readDir(dir)) {
           const fullPath = `${dir}/${entry.name}`;
-          
+          const normalizedFullPath = fullPath.replace(/\\/g, '/');
+
           if (isSymlink(fullPath)) {
             continue;
           }
-          
+
           if (entry.isDirectory) {
-            if (!excludes.some(exc => fullPath.includes(exc))) {
+            if (!normalizedExcludes.some(exc => normalizedFullPath.includes(exc))) {
               await walkDir(fullPath);
             }
-          } else if (entry.isFile) {
-            const ext = entry.name.split('.').pop()?.toLowerCase();
-            if (ext && ['ts', 'tsx', 'js', 'jsx'].includes(ext)) {
-              files.push(fullPath);
-            }
+          } else if (entry.isFile && shouldInclude(fullPath)) {
+            files.push(fullPath);
           }
         }
       } catch (e) {
         console.error(`Error reading directory ${dir}:`, e);
       }
     };
-    
+
     await walkDir(dirPath);
     return files;
   }
 
   extractClassesAndInterfaces(): ClassInfo[] {
     const classes: ClassInfo[] = [];
-    
+
     if (!this.program) {
       return classes;
     }
 
     const scanDir = this.scanPath.replace(/\\/g, '/');
-    
+
     for (const sourceFile of this.program.getSourceFiles()) {
       const sfPath = sourceFile.fileName.replace(/\\/g, '/');
-      
-      // Skip node_modules, deno cache, and other system files
-      if (sfPath.includes('/node_modules/') || 
-          sfPath.includes('/.cache/') ||
-          sfPath.includes('/deno/') ||
-          sfPath.includes('lib.es5') ||
-          sfPath.includes('lib.dom')) {
+
+      if (
+        sfPath.includes('/node_modules/') ||
+        sfPath.includes('/.cache/') ||
+        sfPath.includes('/deno/') ||
+        sfPath.includes('lib.es5') ||
+        sfPath.includes('lib.dom')
+      ) {
         continue;
       }
-      
-      // Only include files in the scanned directory
+
       if (!sfPath.startsWith(scanDir)) {
         continue;
       }
-      
+
+      const imports = this.fileImports.get(sourceFile.fileName) || [];
+
       ts.forEachChild(sourceFile, node => {
         if (ts.isClassDeclaration(node)) {
-          const classInfo = this.extractClassInfo(node, sourceFile);
+          const classInfo = this.extractClassInfo(node, sourceFile, imports);
           if (classInfo) {
             classes.push(classInfo);
           }
         } else if (ts.isInterfaceDeclaration(node)) {
-          const classInfo = this.extractInterfaceInfo(node, sourceFile);
+          const classInfo = this.extractInterfaceInfo(node, sourceFile, imports);
           if (classInfo) {
             classes.push(classInfo);
+          }
+        } else if (ts.isEnumDeclaration(node)) {
+          const enumInfo = this.extractEnumInfo(node, sourceFile, imports);
+          if (enumInfo) {
+            classes.push(enumInfo);
+          }
+        } else if (ts.isTypeAliasDeclaration(node)) {
+          const aliasInfo = this.extractTypeAliasInfo(node, sourceFile, imports);
+          if (aliasInfo) {
+            classes.push(aliasInfo);
+          }
+        } else if (ts.isFunctionDeclaration(node)) {
+          const fnInfo = this.extractFunctionInfo(node, sourceFile, imports);
+          if (fnInfo) {
+            classes.push(fnInfo);
           }
         }
       });
@@ -185,7 +253,7 @@ export class TypeScriptParser {
     return classes;
   }
 
-  private extractClassInfo(node: ts.ClassDeclaration, sourceFile: ts.SourceFile): ClassInfo | null {
+  private extractClassInfo(node: ts.ClassDeclaration, sourceFile: ts.SourceFile, imports: string[]): ClassInfo | null {
     if (!node.name) return null;
 
     const name = node.name.getText();
@@ -201,17 +269,13 @@ export class TypeScriptParser {
 
     const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
     const hasAbstractKeyword = modifiers?.some(m => m.kind === ts.SyntaxKind.AbstractKeyword) || false;
-    
-    // Also detect abstract by naming convention (Base, Abstract prefixes)
-    // Use word boundary to avoid false positives like "BaseballTeam", "Baseline"
     const isAbstractByName = /^(?:Base|Abstract)(?=[A-Z])/.test(name);
-    
-    // Class is abstract if it has abstract keyword OR follows naming convention
     const isAbstract = hasAbstractKeyword || isAbstractByName;
 
     const methods = this.extractMethods(node, sourceFile);
     const properties = this.extractProperties(node, sourceFile);
     const decorators = this.extractDecorators(node, sourceFile);
+    const references = this.collectReferencesFromMembers(methods, properties);
 
     const { startLine, endLine } = this.getLineNumbers(node, sourceFile);
 
@@ -226,12 +290,14 @@ export class TypeScriptParser {
       decorators,
       extends: extendsName,
       implements: implementsNames,
+      imports,
+      references,
       startLine,
       endLine
     };
   }
 
-  private extractInterfaceInfo(node: ts.InterfaceDeclaration, sourceFile: ts.SourceFile): ClassInfo | null {
+  private extractInterfaceInfo(node: ts.InterfaceDeclaration, sourceFile: ts.SourceFile, imports: string[]): ClassInfo | null {
     if (!node.name) return null;
 
     const name = node.name.getText(sourceFile);
@@ -274,6 +340,8 @@ export class TypeScriptParser {
       }
     });
 
+    const references = this.collectReferencesFromMembers(methods, properties);
+
     const { startLine, endLine } = this.getLineNumbers(node, sourceFile);
 
     return {
@@ -287,9 +355,169 @@ export class TypeScriptParser {
       decorators: [],
       extends: undefined,
       implements: extendsNames,
+      imports,
+      references,
       startLine,
       endLine
     };
+  }
+
+  private extractEnumInfo(node: ts.EnumDeclaration, sourceFile: ts.SourceFile, imports: string[]): ClassInfo | null {
+    if (!node.name) return null;
+
+    const name = node.name.getText(sourceFile);
+    const id = this.generateId(name, sourceFile.fileName);
+    const namespace = this.extractNamespace(sourceFile, node);
+    const filePath = sourceFile.fileName;
+
+    const properties: PropertyInfo[] = node.members.map(member => {
+      const propName = member.name.getText(sourceFile);
+      const propType = member.initializer ? member.initializer.getText(sourceFile) : "auto";
+      return {
+        name: propName,
+        type: propType,
+        accessModifier: "",
+        isStatic: false,
+        isReadonly: true,
+        decorators: []
+      };
+    });
+
+    const { startLine, endLine } = this.getLineNumbers(node, sourceFile);
+
+    return {
+      id,
+      name,
+      namespace,
+      filePath,
+      type: "enum",
+      methods: [],
+      properties,
+      decorators: this.extractDecorators(node, sourceFile),
+      extends: undefined,
+      implements: [],
+      imports,
+      references: [],
+      signature: `enum ${name}`,
+      startLine,
+      endLine
+    };
+  }
+
+  private extractTypeAliasInfo(node: ts.TypeAliasDeclaration, sourceFile: ts.SourceFile, imports: string[]): ClassInfo | null {
+    if (!node.name) return null;
+
+    const name = node.name.getText(sourceFile);
+    const id = this.generateId(name, sourceFile.fileName);
+    const namespace = this.extractNamespace(sourceFile, node);
+    const filePath = sourceFile.fileName;
+    const aliasType = node.type ? this.getTextWithType(node.type, sourceFile) : "any";
+
+    const { startLine, endLine } = this.getLineNumbers(node, sourceFile);
+
+    return {
+      id,
+      name,
+      namespace,
+      filePath,
+      type: "typeAlias",
+      methods: [],
+      properties: [{
+        name: "target",
+        type: aliasType,
+        accessModifier: "",
+        isStatic: false,
+        isReadonly: true,
+        decorators: []
+      }],
+      decorators: this.extractDecorators(node, sourceFile),
+      extends: undefined,
+      implements: [],
+      imports,
+      references: this.collectReferencesFromType(aliasType),
+      signature: `${name} = ${aliasType}`,
+      startLine,
+      endLine
+    };
+  }
+
+  private extractFunctionInfo(node: ts.FunctionDeclaration, sourceFile: ts.SourceFile, imports: string[]): ClassInfo | null {
+    if (!node.name) return null;
+
+    const name = node.name.getText(sourceFile);
+    const id = this.generateId(name, sourceFile.fileName);
+    const namespace = this.extractNamespace(sourceFile, node);
+    const filePath = sourceFile.fileName;
+
+    const parameters = this.extractParameterInfo(node.parameters, sourceFile);
+    const returnType = node.type ? this.getTextWithType(node.type, sourceFile) : "any";
+    const signature = `${name}(${parameters.map(p => `${p.name}${p.optional ? '?' : ''}: ${p.type}`).join(', ')}) => ${returnType}`;
+
+    const methods: MethodInfo[] = [{
+      name,
+      parameters,
+      returnType,
+      accessModifier: "",
+      isStatic: false,
+      isAbstract: false,
+      decorators: this.extractDecorators(node, sourceFile)
+    }];
+
+    const references = this.collectReferencesFromType(returnType)
+      .concat(parameters.flatMap(param => this.collectReferencesFromType(param.type)));
+
+    const { startLine, endLine } = this.getLineNumbers(node, sourceFile);
+
+    return {
+      id,
+      name,
+      namespace,
+      filePath,
+      type: "function",
+      methods,
+      properties: [],
+      decorators: this.extractDecorators(node, sourceFile),
+      extends: undefined,
+      implements: [],
+      imports,
+      references: this.unique(references),
+      signature,
+      startLine,
+      endLine
+    };
+  }
+
+  private extractImportsFromSourceFile(sourceFile: ts.SourceFile): string[] {
+    const imports = new Set<string>();
+
+    for (const statement of sourceFile.statements) {
+      if (!ts.isImportDeclaration(statement)) {
+        continue;
+      }
+
+      const clause = statement.importClause;
+      if (!clause) continue;
+
+      if (clause.name) {
+        imports.add(clause.name.getText(sourceFile));
+      }
+
+      const namedBindings = clause.namedBindings;
+      if (!namedBindings) continue;
+
+      if (ts.isNamedImports(namedBindings)) {
+        for (const binding of namedBindings.elements) {
+          imports.add(binding.name.getText(sourceFile));
+          if (binding.propertyName) {
+            imports.add(binding.propertyName.getText(sourceFile));
+          }
+        }
+      } else if (ts.isNamespaceImport(namedBindings)) {
+        imports.add(namedBindings.name.getText(sourceFile));
+      }
+    }
+
+    return Array.from(imports);
   }
 
   private extractMethods(node: ts.ClassDeclaration, sourceFile: ts.SourceFile): MethodInfo[] {
@@ -367,8 +595,10 @@ export class TypeScriptParser {
     });
   }
 
-  private extractDecorators(node: ts.HasDecorators, sourceFile: ts.SourceFile): DecoratorInfo[] {
+  private extractDecorators(node: ts.Node, sourceFile: ts.SourceFile): DecoratorInfo[] {
     const decorators: DecoratorInfo[] = [];
+    if (!ts.canHaveDecorators(node)) return decorators;
+
     const decList = ts.getDecorators(node);
 
     if (decList) {
@@ -378,7 +608,7 @@ export class TypeScriptParser {
         if (match) {
           const name = match[1];
           let arguments_: Record<string, unknown> = {};
-          
+
           if (match[2]) {
             try {
               arguments_ = JSON.parse(match[2]);
@@ -386,7 +616,7 @@ export class TypeScriptParser {
               arguments_ = { raw: match[2] };
             }
           }
-          
+
           decorators.push({ name, arguments: arguments_ });
         }
       }
@@ -434,6 +664,43 @@ export class TypeScriptParser {
   private generateId(name: string, filePath: string): string {
     const pathHash = filePath.split('/').slice(-3, -1).join('_').replace(/[^a-zA-Z0-9]/g, '_');
     return `${pathHash}_${name}`;
+  }
+
+  private collectReferencesFromMembers(methods: MethodInfo[], properties: PropertyInfo[]): string[] {
+    const names = [
+      ...methods.flatMap(method => [
+        ...this.collectReferencesFromType(method.returnType),
+        ...method.parameters.flatMap(p => this.collectReferencesFromType(p.type))
+      ]),
+      ...properties.flatMap(property => this.collectReferencesFromType(property.type))
+    ];
+    return this.unique(names);
+  }
+
+  private collectReferencesFromType(typeText: string): string[] {
+    const candidates = typeText.match(/[A-Za-z_$][A-Za-z0-9_$\.]*[A-Za-z0-9_$]/g) || [];
+    const names = candidates
+      .map(candidate => candidate.split('.').pop() || candidate)
+      .filter(name => {
+        if (!/^[A-Z]/.test(name)) return false;
+        if (this.isBuiltInTypeName(name)) return false;
+        return name.length > 1;
+      });
+    return this.unique(names);
+  }
+
+  private isBuiltInTypeName(name: string): boolean {
+    const builtins = new Set([
+      "Promise", "Array", "Map", "Set", "WeakMap", "WeakSet", "Record", "Readonly", "Pick",
+      "ReturnType", "Parameters", "ConstructorParameters", "Omit", "Partial", "Required", "ReadonlyArray",
+      "String", "Number", "Boolean", "Object", "Date", "RegExp", "Error", "ErrorEvent", "Event"
+    ]);
+
+    return builtins.has(name);
+  }
+
+  private unique(items: string[]): string[] {
+    return [...new Set(items.map(item => item.trim()).filter(Boolean))];
   }
 
   getSourceFileContent(filePath: string): string | null {

@@ -2,6 +2,9 @@
 
 A localhost TypeScript-based code analysis tool for visualizing object-oriented structure in JavaScript and TypeScript projects. The tool scans source files, extracts classes and interfaces, maps inheritance and implementation relationships, and presents the result as an interactive architecture graph with detailed entity inspection.
 
+### Main Cluster
+![Main Interface](./oopgraph05.png)
+
 ## Overview
 
 Code Structure Visualizer is designed to help developers understand and explore the architecture of TypeScript and JavaScript codebases. By analyzing the object-oriented structure, it provides insights into:
@@ -16,6 +19,9 @@ This tool is particularly useful for:
 - Understanding architectural patterns
 - Identifying code organization
 - Refactoring planning
+
+### Code Pannel
+![Code View](./oopgraph06.png)
 
 ## Features
 

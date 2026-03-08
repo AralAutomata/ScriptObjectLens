@@ -17,9 +17,14 @@ interface ClassProperty {
 interface GraphNode {
   id: string;
   label: string;
-  type: 'class' | 'interface' | 'abstract';
+  type: 'class' | 'interface' | 'abstract' | 'enum' | 'typeAlias' | 'function';
   namespace: string;
   filePath: string;
+  inDegree?: number;
+  outDegree?: number;
+  totalDegree?: number;
+  isCycleNode?: boolean;
+  clusterId?: number;
   extends?: string;
   implements: string[];
   methods: ClassMethod[];
@@ -36,7 +41,7 @@ interface GraphNode {
 interface GraphEdge {
   source: string | GraphNode;
   target: string | GraphNode;
-  type: 'extends' | 'implements' | 'composition' | 'uses';
+  type: 'extends' | 'implements' | 'composition' | 'uses' | 'imports';
   label?: string;
 }
 
@@ -45,12 +50,25 @@ interface GraphProps {
   edges: GraphEdge[];
   onNodeClick: (node: GraphNode) => void;
   selectedNodeId?: string;
+  simpleMode: boolean;
 }
 
-const NODE_COLORS: Record<string, { fill: string; stroke: string; glow: string }> = {
-  class: { fill: '#3b82f6', stroke: '#2563eb', glow: 'rgba(59, 130, 246, 0.4)' },
-  interface: { fill: '#22c55e', stroke: '#16a34a', glow: 'rgba(34, 197, 94, 0.4)' },
-  abstract: { fill: '#f97316', stroke: '#ea580c', glow: 'rgba(249, 115, 22, 0.4)' },
+const NODE_COLORS: Record<string, { fill: string; stroke: string; glow: string; badge: string; indicator: string }> = {
+  class: { fill: '#3b82f6', stroke: '#2563eb', glow: 'rgba(59, 130, 246, 0.4)', badge: 'C', indicator: 'C' },
+  interface: { fill: '#22c55e', stroke: '#16a34a', glow: 'rgba(34, 197, 94, 0.4)', badge: 'I', indicator: 'I' },
+  abstract: { fill: '#f97316', stroke: '#ea580c', glow: 'rgba(249, 115, 22, 0.4)', badge: 'A', indicator: 'A' },
+  enum: { fill: '#7c3aed', stroke: '#6d28d9', glow: 'rgba(124, 58, 237, 0.35)', badge: 'E', indicator: 'E' },
+  typeAlias: { fill: '#14b8a6', stroke: '#0f766e', glow: 'rgba(20, 184, 166, 0.35)', badge: 'T', indicator: 'T' },
+  function: { fill: '#0ea5e9', stroke: '#0369a1', glow: 'rgba(14, 165, 233, 0.35)', badge: 'ƒ', indicator: 'ƒ' },
+};
+
+const TYPE_INDICATORS: Record<string, string> = {
+  class: 'C',
+  interface: 'I',
+  abstract: 'A',
+  enum: 'E',
+  typeAlias: 'T',
+  function: 'ƒ'
 };
 
 const EDGE_COLORS: Record<string, string> = {
@@ -58,13 +76,14 @@ const EDGE_COLORS: Record<string, string> = {
   implements: '#94a3b8',
   composition: '#475569',
   uses: '#64748b',
+  imports: '#f59e0b',
 };
 
 const BG_COLOR = '#0f172a';
 const TEXT_COLOR = '#f1f5f9';
 const TEXT_MUTED = '#94a3b8';
 
-export default function Graph({ nodes, edges, onNodeClick, selectedNodeId }: GraphProps) {
+export default function Graph({ nodes, edges, onNodeClick, selectedNodeId, simpleMode }: GraphProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const simulationRef = useRef<d3.Simulation<GraphNode, GraphEdge> | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -87,8 +106,11 @@ export default function Graph({ nodes, edges, onNodeClick, selectedNodeId }: Gra
   }, []);
 
   const calculateNodeSize = (node: GraphNode): number => {
-    const complexity = node.methodCount + node.propertyCount;
-    return Math.max(20, Math.min(40, 20 + complexity * 1.5));
+    const complexity = simpleMode
+      ? (node.totalDegree || 0)
+      : node.methodCount + node.propertyCount + (node.totalDegree || 0);
+    const baseSize = simpleMode ? 22 : 20;
+    return Math.max(baseSize, Math.min(40, baseSize + complexity * 1.4));
   };
 
   useEffect(() => {
@@ -120,7 +142,7 @@ export default function Graph({ nodes, edges, onNodeClick, selectedNodeId }: Gra
     feMerge.append('feMergeNode').attr('in', 'SourceGraphic');
 
     // Arrow markers
-    ['extends', 'implements', 'composition', 'uses'].forEach(type => {
+    ['extends', 'implements', 'composition', 'uses', 'imports'].forEach(type => {
       defs.append('marker')
         .attr('id', `arrowhead-${type}`)
         .attr('viewBox', '-0 -5 10 10')
@@ -187,12 +209,14 @@ export default function Graph({ nodes, edges, onNodeClick, selectedNodeId }: Gra
 
     link.append('line')
       .attr('stroke', d => EDGE_COLORS[d.type])
-      .attr('stroke-width', 2)
-      .attr('stroke-opacity', 0.6)
+      .attr('stroke-width', simpleMode ? 2.2 : 2)
+      .attr('stroke-opacity', simpleMode ? 0.55 : 0.6)
       .attr('stroke-dasharray', d => {
+        if (simpleMode) return '';
         if (d.type === 'implements') return '8,4';
         if (d.type === 'composition') return '4,4';
         if (d.type === 'uses') return '2,4';
+        if (d.type === 'imports') return '1,6';
         return '';
       })
       .attr('marker-end', d => `url(#arrowhead-${d.type})`);
@@ -214,21 +238,21 @@ export default function Graph({ nodes, edges, onNodeClick, selectedNodeId }: Gra
     node.append('circle')
       .attr('class', 'glow')
       .attr('r', d => calculateNodeSize(d) + 8)
-      .attr('fill', d => NODE_COLORS[d.type].glow)
+      .attr('fill', d => (NODE_COLORS[d.type] || NODE_COLORS.class).glow)
       .attr('opacity', 0);
 
     // Main circle
     node.append('circle')
       .attr('r', d => calculateNodeSize(d))
-      .attr('fill', d => NODE_COLORS[d.type].fill)
-      .attr('stroke', d => NODE_COLORS[d.type].stroke)
+      .attr('fill', d => (NODE_COLORS[d.type] || NODE_COLORS.class).fill)
+      .attr('stroke', d => (NODE_COLORS[d.type] || NODE_COLORS.class).stroke)
       .attr('stroke-width', d => d.type === 'abstract' ? 3 : 2)
       .attr('stroke-dasharray', d => d.type === 'abstract' ? '4,2' : '')
       .attr('filter', 'url(#glow)');
 
     // Type indicator
     node.append('text')
-      .text(d => d.type === 'class' ? 'C' : d.type === 'abstract' ? 'A' : 'I')
+      .text(d => TYPE_INDICATORS[d.type] || (NODE_COLORS[d.type] || NODE_COLORS.class).indicator)
       .attr('text-anchor', 'middle')
       .attr('dominant-baseline', 'central')
       .attr('fill', '#fff')
@@ -236,41 +260,50 @@ export default function Graph({ nodes, edges, onNodeClick, selectedNodeId }: Gra
       .attr('font-weight', 'bold')
       .attr('font-family', 'system-ui, sans-serif');
 
-    // Method badge
-    node.filter(d => d.methodCount > 0)
-      .append('text')
-      .text(d => `M${d.methodCount}`)
-      .attr('x', d => calculateNodeSize(d) + 4)
-      .attr('y', -4)
-      .attr('fill', '#60a5fa')
-      .attr('font-size', '10px')
-      .attr('font-weight', 'bold')
-      .attr('font-family', 'system-ui, sans-serif');
+    if (!simpleMode) {
+      node.filter((d) => ((d.inDegree || 0) + (d.outDegree || 0)) >= 4)
+        .append('text')
+        .text((d) => `!${((d.inDegree || 0) + (d.outDegree || 0))}`)
+        .attr('x', (d) => -calculateNodeSize(d) - 4)
+        .attr('y', 18)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#fbbf24')
+        .attr('font-size', '10px')
+        .attr('font-weight', 'bold')
+        .attr('font-family', 'system-ui, sans-serif');
 
-    // Property badge
-    node.filter(d => d.propertyCount > 0)
-      .append('text')
-      .text(d => `P${d.propertyCount}`)
-      .attr('x', d => calculateNodeSize(d) + 4)
-      .attr('y', 8)
-      .attr('fill', '#22c55e')
-      .attr('font-size', '10px')
-      .attr('font-weight', 'bold')
-      .attr('font-family', 'system-ui, sans-serif');
+      node.filter(d => d.methodCount > 0)
+        .append('text')
+        .text(d => `M${d.methodCount}`)
+        .attr('x', d => calculateNodeSize(d) + 4)
+        .attr('y', -4)
+        .attr('fill', '#60a5fa')
+        .attr('font-size', '10px')
+        .attr('font-weight', 'bold')
+        .attr('font-family', 'system-ui, sans-serif');
 
-    // Depth badge
-    node.filter(d => d.inheritanceDepth > 0)
-      .append('text')
-      .text(d => `D${d.inheritanceDepth}`)
-      .attr('x', d => -calculateNodeSize(d) - 4)
-      .attr('y', 4)
-      .attr('text-anchor', 'middle')
-      .attr('fill', '#f97316')
-      .attr('font-size', '10px')
-      .attr('font-weight', 'bold')
-      .attr('font-family', 'system-ui, sans-serif');
+      node.filter(d => d.propertyCount > 0)
+        .append('text')
+        .text(d => `P${d.propertyCount}`)
+        .attr('x', d => calculateNodeSize(d) + 4)
+        .attr('y', 8)
+        .attr('fill', '#22c55e')
+        .attr('font-size', '10px')
+        .attr('font-weight', 'bold')
+        .attr('font-family', 'system-ui, sans-serif');
 
-    // Node label
+      node.filter(d => d.inheritanceDepth > 0)
+        .append('text')
+        .text(d => `D${d.inheritanceDepth}`)
+        .attr('x', d => -calculateNodeSize(d) - 4)
+        .attr('y', 4)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#f97316')
+        .attr('font-size', '10px')
+        .attr('font-weight', 'bold')
+        .attr('font-family', 'system-ui, sans-serif');
+    }
+
     node.append('text')
       .text(d => d.label.length > 20 ? d.label.substring(0, 18) + '...' : d.label)
       .attr('x', d => calculateNodeSize(d) + 12)
@@ -280,14 +313,15 @@ export default function Graph({ nodes, edges, onNodeClick, selectedNodeId }: Gra
       .attr('font-weight', '500')
       .attr('font-family', 'system-ui, sans-serif');
 
-    // Namespace label
-    node.append('text')
-      .text(d => d.namespace ? (d.namespace.split('.').pop() || '') : '')
-      .attr('x', d => calculateNodeSize(d) + 12)
-      .attr('y', 18)
-      .attr('fill', TEXT_MUTED)
-      .attr('font-size', '10px')
-      .attr('font-family', 'system-ui, sans-serif');
+    if (!simpleMode) {
+      node.append('text')
+        .text(d => d.namespace ? (d.namespace.split('.').pop() || '') : '')
+        .attr('x', d => calculateNodeSize(d) + 12)
+        .attr('y', 18)
+        .attr('fill', TEXT_MUTED)
+        .attr('font-size', '10px')
+        .attr('font-family', 'system-ui, sans-serif');
+    }
 
     // Hover handlers with direct D3 manipulation (no React state)
     node.on('mouseenter', function(event, d) {
@@ -338,8 +372,17 @@ export default function Graph({ nodes, edges, onNodeClick, selectedNodeId }: Gra
       link.style('opacity', 0.6);
     });
 
-    // Add selection ring (red indicator)
-    const selectionRing = node.append('circle')
+    // Cycle ring and selection ring (red indicator)
+    node.append('circle')
+      .attr('class', 'cycle-ring')
+      .attr('fill', 'none')
+      .attr('stroke', '#ef4444')
+      .attr('stroke-width', 2)
+      .attr('opacity', d => (!simpleMode && d.isCycleNode) ? 0.85 : 0)
+      .attr('r', d => (!simpleMode && d.isCycleNode) ? (calculateNodeSize(d) + 3) : 0)
+      .style('pointer-events', 'none');
+
+    node.append('circle')
       .attr('class', 'selection-ring')
       .attr('r', d => calculateNodeSize(d) + 6)
       .attr('fill', 'none')
@@ -349,12 +392,6 @@ export default function Graph({ nodes, edges, onNodeClick, selectedNodeId }: Gra
       .style('pointer-events', 'none');
 
     // Update selection ring when selectedNodeId changes
-    if (selectedNodeId) {
-      selectionRing
-        .attr('opacity', d => d.id === selectedNodeId ? 1 : 0)
-        .attr('r', d => d.id === selectedNodeId ? calculateNodeSize(d) + 6 : 0);
-    }
-
     simulation.on('tick', () => {
       link.select('line')
         .attr('x1', d => (d.source as GraphNode).x || 0)
@@ -406,7 +443,7 @@ export default function Graph({ nodes, edges, onNodeClick, selectedNodeId }: Gra
     return () => {
       simulation.stop();
     };
-  }, [nodes, edges, selectedNodeId, onNodeClick, dimensions]);
+    }, [nodes, edges, onNodeClick, dimensions, simpleMode]);
 
   // Update selection ring when selectedNodeId changes
   useEffect(() => {
@@ -415,11 +452,12 @@ export default function Graph({ nodes, edges, onNodeClick, selectedNodeId }: Gra
     const svg = d3.select(svgRef.current);
     svg.selectAll('.selection-ring')
       .attr('opacity', (d: any) => d.id === selectedNodeId ? 1 : 0)
-      .attr('r', (d: any) => {
-        const size = Math.max(20, Math.min(40, 20 + (d.methodCount + d.propertyCount) * 1.5));
-        return d.id === selectedNodeId ? size + 6 : 0;
-      });
-  }, [selectedNodeId]);
+      .attr('r', (d: any) => d.id === selectedNodeId ? calculateNodeSize(d as GraphNode) + 6 : 0);
+
+    svg.selectAll('.cycle-ring')
+      .attr('opacity', (d: any) => (!simpleMode && (d as GraphNode).isCycleNode) ? 0.85 : 0)
+      .attr('r', (d: any) => (!simpleMode && (d as GraphNode).isCycleNode) ? calculateNodeSize(d as GraphNode) + 3 : 0);
+  }, [selectedNodeId, simpleMode]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -459,14 +497,14 @@ function HoverCard({ node }: { node: GraphNode }) {
           width: '36px',
           height: '36px',
           borderRadius: '50%',
-          background: NODE_COLORS[node.type].fill,
+          background: (NODE_COLORS[node.type] || NODE_COLORS.class).fill,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           fontWeight: 'bold',
           fontSize: '14px',
         }}>
-          {node.type === 'class' ? 'C' : node.type === 'abstract' ? 'A' : 'I'}
+          {(NODE_COLORS[node.type] || NODE_COLORS.class).badge}
         </div>
         <div>
           <div style={{ fontWeight: 600, fontSize: '16px', color: TEXT_COLOR }}>{node.label}</div>
@@ -512,6 +550,8 @@ function HoverCard({ node }: { node: GraphNode }) {
         </div>
       )}
       
+      {node.isCycleNode ? <div style={{ fontSize: '12px', color: '#fca5a5', marginBottom: '8px' }}>⚠️ participates in cycle</div> : null}
+
       {node.implements.length > 0 && (
         <div style={{ fontSize: '12px', color: TEXT_MUTED, marginBottom: '8px' }}>
           <span style={{ color: TEXT_COLOR }}>implements</span> {node.implements.join(', ')}
@@ -524,7 +564,7 @@ function HoverCard({ node }: { node: GraphNode }) {
             Methods
           </div>
           {previewMethods.map((m, i) => (
-            <div key={i} style={{ 
+            <div key={`${m.name}-${m.parameters.length}-${i}`} style={{ 
               fontSize: '11px', 
               fontFamily: 'monospace',
               color: '#dcdcaa',
@@ -572,6 +612,18 @@ function GraphLegend() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: NODE_COLORS.interface.fill }} />
           <span style={{ fontSize: '12px' }}>Interface</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: NODE_COLORS.enum.fill }} />
+          <span style={{ fontSize: '12px' }}>Enum</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: NODE_COLORS.typeAlias.fill }} />
+          <span style={{ fontSize: '12px' }}>Type Alias</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: NODE_COLORS.function.fill }} />
+          <span style={{ fontSize: '12px' }}>Function</span>
         </div>
         <div style={{ borderTop: '1px solid #334155', paddingTop: '8px', marginTop: '4px' }}>
           <div style={{ fontSize: '10px', color: TEXT_MUTED, marginBottom: '6px' }}>Badges</div>

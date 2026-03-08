@@ -1,14 +1,21 @@
+export type EntityType = "class" | "interface" | "abstract" | "enum" | "typeAlias" | "function";
+
+export type GraphNodeType = "class" | "interface" | "abstract" | "enum" | "typeAlias" | "function";
+
 export interface ClassInfo {
   id: string;
   name: string;
   namespace: string;
   filePath: string;
-  type: "class" | "interface" | "abstract";
+  type: EntityType;
   methods: MethodInfo[];
   properties: PropertyInfo[];
   decorators: DecoratorInfo[];
   extends?: string;
   implements: string[];
+  references?: string[];
+  imports?: string[];
+  signature?: string;
   startLine: number;
   endLine: number;
 }
@@ -47,7 +54,8 @@ export interface DecoratorInfo {
 export interface Relationship {
   source: string;
   target: string;
-  type: "extends" | "implements" | "composition";
+  type: "extends" | "implements" | "composition" | "uses" | "imports";
+  filePath?: string;
 }
 
 export interface GraphData {
@@ -58,15 +66,20 @@ export interface GraphData {
 export interface GraphNode {
   id: string;
   label: string;
-  type: "class" | "interface";
+  type: GraphNodeType;
   namespace: string;
   filePath: string;
+  inDegree?: number;
+  outDegree?: number;
+  totalDegree?: number;
+  isCycleNode?: boolean;
+  clusterId?: number;
 }
 
 export interface GraphEdge {
   source: string;
   target: string;
-  type: "extends" | "implements" | "composition";
+  type: "extends" | "implements" | "composition" | "uses" | "imports";
 }
 
 export interface AnalysisResult {
@@ -79,6 +92,10 @@ export interface AnalysisResult {
   totalFiles: number;
   totalClasses: number;
   totalInterfaces: number;
+  totalEnums?: number;
+  totalTypeAliases?: number;
+  totalFunctions?: number;
+  totalEntities?: number;
 }
 
 export interface AnalyzeRequest {
