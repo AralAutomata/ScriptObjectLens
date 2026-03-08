@@ -20,6 +20,9 @@ deno.lock
 .env.test.local
 .env.production.local
 .env.*.local
+.env.*
+!.env.example
+!.env.*.example
 
 # IDE
 .vscode/
@@ -58,9 +61,28 @@ temp/
 *.pem
 *.key
 *.crt
+*.p12
+*.pfx
+*.jks
+
+# Secrets and credentials
+secrets.*
+*.secrets
+credentials.json
+credentials-*.json
+*credentials*.json
+service-account*.json
+*.token
+*.tokens
+
+# Local databases and runtime state
+*.db
+*.sqlite
+*.sqlite3
+*.pid
 
 # Misc
 *.tgz
 
- AGENTS.md
-
+# Local agent instructions (do not commit)
+AGENTS.md

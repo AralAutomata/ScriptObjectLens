@@ -1,329 +1,278 @@
 # Code Structure Visualizer
 
-A localhost TypeScript-based code analysis tool for visualizing object-oriented structure in JavaScript and TypeScript projects. The tool scans source files, extracts classes and interfaces, maps inheritance and implementation relationships, and presents the result as an interactive architecture graph with detailed entity inspection.
+Local-first architecture explorer for TypeScript/JavaScript projects.
 
-### Main Cluster
-![Main Interface](./oopgraph05.png)
+It combines a Deno analysis backend with a Next.js + D3 frontend and now ships with four analysis tabs:
 
-## Overview
+1. **Classes**: OOP relationship graph + cluster/table view
+2. **File Graph**: hierarchical import-aware file tree
+3. **Route Tree**: discovered HTTP/page routes (Next.js + Express-style)
+4. **DB Schema**: Prisma/Drizzle model and relation map
 
-Code Structure Visualizer is designed to help developers understand and explore the architecture of TypeScript and JavaScript codebases. By analyzing the object-oriented structure, it provides insights into:
+![Code Panel](./oopgraph05.png)
 
-- Class and interface relationships (inheritance, implementation)
-- Code complexity indicators
-- Method and property distributions
-- Inheritance depth analysis
+---
 
-This tool is particularly useful for:
-- Learning new codebases
-- Understanding architectural patterns
-- Identifying code organization
-- Refactoring planning
+## What You Can Explore
 
-### Code Pannel
-![Code View](./oopgraph06.png)
+### 1) Classes Tab
 
-## Features
+- Class/interface/abstract/enum/type/function extraction from TS/JS source
+- Relationship graph (`extends`, `implements`, `composition`, `uses`, `imports`)
+- Degree/cycle metadata (high-degree detection + cycle markers)
+- View modes:
+  - **Graph**: force-directed architecture map
+  - **Clusters**: grouped table cards with edge breakdowns
+- Entity inspection panel with details + source-code view
+- Export controls (JSON, SVG, PNG)
 
-### Interactive Graph Visualization
+![Main Cluster](./oopgraph06.png)
 
-- **D3.js-powered force-directed graph** with smooth pan, zoom, and drag interactions
-- **Visual node differentiation** by type:
-  - Classes (blue circles)
-  - Abstract classes (orange circles with dashed borders)
-  - Interfaces (green circles)
-- **Node sizing** based on complexity (number of methods + properties)
-- **Relationship lines** showing:
-  - Extends relationships (solid arrows)
-  - Implements relationships (dashed arrows)
-  - Composition/usage lines
+### 2) File Graph Tab
 
-### Rich Entity Information
+- Import graph from static + dynamic imports (`import` / `import()`)
+- File classification (`page`, `api`, `component`, `lib`, `config`, `util`)
+- Hierarchical tree built from project-relative file paths
+- Expand/collapse folders, search, and type filters
+- Vertical scroll behavior for deep trees
 
-- **Hover cards** displaying:
-  - Entity name and type badge
-  - Method count (M#)
-  - Property count (P#)
-  - Inheritance depth indicator (D#)
-- **Click-to-select** with connected relationship highlighting
-- **Detailed inspection panel** with:
-  - File location and line numbers
-  - Namespace information
-  - Full method and property lists with types
-  - Decorator information
-  - Related classes and interfaces
+![Route Tree View](./oopgraph07.png)
 
-### Code Inspection
+### 3) Route Tree Tab
 
-- **Syntax-highlighted source code** view using Prism.js
-- **Line number navigation** to relevant code sections
-- **Tab-based interface** for switching between details and code views
+- Framework detection and route discovery for:
+  - Next.js App Router (`app/`, `src/app/`)
+  - Next.js Pages Router (`pages/`, `src/pages/`)
+  - Express-style route declarations (`app.get`, `router.post`, etc.)
+- Method extraction for route handlers (GET/POST/PUT/DELETE/PATCH/HEAD/OPTIONS)
+- Merged method display for shared route paths
+- Expand/collapse tree navigation with hover metadata
 
-### Search and Filtering
+![DB Schema View](./oopgraph08.png)
 
-- **Filter by type**: Show/hide classes, interfaces, or abstract classes
-- **Search by name**: Quick search across all entities
-- **Combined filtering** for precise exploration
+### 4) DB Schema Tab
 
-### Export Capabilities
+- Prisma schema parsing (`schema.prisma`)
+- Drizzle table + relation parsing (`pgTable/mysqlTable/sqliteTable`, `references`, `relations()`)
+- Model cards with field metadata (`id`, `unique`, optionality, relation hints)
+- Directed relation rendering with type-aware styling
 
-- **JSON export**: Full analysis data for further processing
-- **SVG export**: Vector graphics for documentation
-- **PNG export**: Raster images for sharing
+![File Graph View](./oopgraph09.png)
 
-## Screenshots
+---
 
-### Main Interface
-![Main Interface](./oopgraph01.png)
+## Architecture
 
-### Graph Visualization
-![Graph Visualization](./oopgraph02.png)
-
-### Node Details Panel
-![Node Details Panel](./oopgraph03.png)
-
-### Code View
-![Code View](./oopgraph04.png)
-
-## Technology Stack
-
-### Backend (Deno Runtime)
-
-- **Deno 2.x** - Modern TypeScript runtime
-- **TypeScript Compiler API** - For parsing and analyzing TypeScript source code
-- **Custom HTTP server** - Lightweight API endpoints
-
-### Frontend (Next.js)
-
-- **Next.js 15** - React framework with server-side rendering
-- **D3.js 7** - Data-driven document manipulation for graph visualization
-- **Prism.js** - Syntax highlighting for code display
-- **React 18** - UI component library
-
-### Architecture
-
+```text
+Frontend (Next.js, port 3001)  <----HTTP---->  Backend (Deno, port 8000)
 ```
-┌─────────────────┐     ┌─────────────────┐
-│   Frontend      │────▶│   Backend       │
-│   (Next.js)     │◀────│   (Deno)        │
-│   Port: 3001    │     │   Port: 8000    │
-└─────────────────┘     └─────────────────┘
-```
+
+- **Frontend** handles rendering, filtering, tab state, and interaction.
+- **Backend** performs filesystem scanning, parsing, and analysis.
+- **Shared types** live in `shared/types.ts` and `backend/src/shared/types.ts`.
+
+---
+
+## Tech Stack
+
+- **Frontend**: Next.js 15, React 18, D3.js 7, Prism.js
+- **Backend**: Deno 2, TypeScript Compiler API
+- **Language**: TypeScript (strict mode)
+
+---
 
 ## Getting Started
 
 ### Prerequisites
 
-- **Deno 2.x** or higher (https://deno.land/)
-- **Node.js 18+** (for Next.js frontend)
-- **npm** or **pnpm**
+- Deno 2+
+- Node.js 18+
+- npm
 
-### Installation
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd code-structure-visualizer
-```
-
-2. Install frontend dependencies:
-```bash
-cd frontend
-npm install
-```
-
-3. Return to project root:
-```bash
-cd ..
-```
-
-### Running the Application
-
-#### Single Command: Build and Run
-
-The easiest way to start the application is with a single command:
+### Quick Start (recommended)
 
 ```bash
 ./start.sh
 ```
 
-This script will:
-1. Install frontend dependencies (npm install)
-2. Start the backend API server on port 8000
-3. Start the frontend development server on port 3001
-4. Display the URLs and keep both services running
+This script:
 
-Press `Ctrl+C` to stop all services.
+1. Installs frontend dependencies
+2. Starts backend API on `http://localhost:8000`
+3. Starts frontend on `http://localhost:3001`
 
-#### Manual Startup
+Press `Ctrl+C` to stop both.
 
-If you prefer to run the services separately:
+### Manual Start
 
-**Start the backend:**
+Backend:
+
 ```bash
 deno task start
 ```
-or
-```bash
-deno run --allow-read --allow-net --allow-env backend/src/cli.ts
-```
 
-**Start the frontend (in a new terminal):**
+Frontend (new terminal):
+
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
 
-### Access the Application
+---
 
-Open your browser and navigate to:
-- **Frontend**: http://localhost:3001
-- **Backend API**: http://localhost:8000
+## Usage Workflow
 
-## Usage Guide
+1. Open `http://localhost:3001`
+2. Enter an **absolute project path**
+3. Click **Analyze**
+4. Explore tabs:
+   - `Classes`
+   - `File Graph`
+   - `Route Tree`
+   - `DB Schema`
 
-### Analyzing a Project
+### Path recommendation
 
-1. Enter the absolute path to a TypeScript or JavaScript project directory in the input field
-2. Click "Analyze" to start the analysis
-3. Wait for the graph to render
+Use your **project root** path (not a deep subdirectory) for best route/schema/file discovery.
 
-### Navigating the Graph
-
-- **Pan**: Click and drag on empty space
-- **Zoom**: Mouse wheel or pinch gesture
-- **Drag nodes**: Click and drag individual nodes
-- **Hover**: View entity summary card
-- **Click**: Select node and show details panel
-- **Double-click**: Center view on node
-
-### Using the Details Panel
-
-1. Click on any node to open the details panel
-2. Switch between "Details" and "Code" tabs
-3. Drag the left edge to resize the panel
-4. Click the X button to close
-
-### Filtering and Searching
-
-- Use the filter buttons to show/hide specific entity types
-- Type in the search bar to filter by name
-- Filters can be combined
-
-### Exporting Analysis
-
-Click the export button to save:
-- JSON for data processing
-- SVG for vector graphics
-- PNG for images
-
-## Project Structure
-
-```
-code-structure-visualizer/
-├── backend/
-│   ├── src/
-│   │   ├── analyzer/
-│   │   │   ├── parser.ts              # TypeScript Compiler API wrapper
-│   │   │   └── relationship-mapper.ts # Relationship mapping logic
-│   │   ├── server/
-│   │   │   ├── handlers.ts            # API endpoint handlers
-│   │   │   └── server.ts              # HTTP server
-│   │   ├── shared/
-│   │   │   └── types.ts               # TypeScript interfaces
-│   │   └── cli.ts                     # Command-line interface
-│   └── deno.json                      # Deno configuration
-├── frontend/
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── page.tsx               # Main application page
-│   │   │   └── page.css               # Main styles
-│   │   ├── components/
-│   │   │   ├── Graph.tsx              # D3.js graph component
-│   │   │   ├── NodeDetails.tsx        # Details panel
-│   │   │   ├── SearchBar.tsx          # Search and filter
-│   │   │   └── ExportControls.tsx     # Export functionality
-│   │   └── lib/
-│   │       └── api.ts                 # API client
-│   ├── package.json                   # Node.js dependencies
-│   └── next.config.js                 # Next.js configuration
-├── shared/
-│   └── types.ts                       # Shared type definitions
-├── deno.json                          # Root Deno configuration
-└── start.sh                           # Startup script
-```
+---
 
 ## API Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/analyze` | POST | Analyze a project directory |
-| `/api/result/:id` | GET | Get analysis result by ID |
-| `/api/entity/:id` | GET | Get entity details by ID |
-| `/api/file` | GET | Get file content (requires analysisId) |
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/analyze` | POST | Run class/entity analysis |
+| `/api/result/:id` | GET | Fetch cached analysis result |
+| `/api/entity/:id` | GET | Fetch detailed entity metadata |
+| `/api/file` | GET | Fetch source content by `analysisId` + path |
+| `/api/filegraph?path=...` | GET | Build file import graph |
+| `/api/routes?path=...` | GET | Discover route tree |
+| `/api/schema?path=...` | GET | Parse DB schema |
 
-### Analyze Request
+### `POST /api/analyze` body
 
 ```json
 {
-  "path": "/path/to/project",
+  "path": "/absolute/path/to/project",
   "exclude": ["node_modules", "dist"],
   "include": ["**/*.ts", "**/*.tsx"]
 }
 ```
 
-## Development
+---
 
-### Running Tests
+## Development Commands
 
-Tests can be added using Deno's built-in test runner:
+### Root / Backend (Deno)
+
 ```bash
-deno test
+deno task start      # backend with watch mode
+deno task cli        # run backend CLI
+deno test            # backend tests
+deno check backend/src/**/*.ts
 ```
 
-### Building for Production
+### Frontend (Next.js)
 
-**Frontend:**
 ```bash
 cd frontend
+npm run dev
+npm run lint
 npm run build
-npm start
+npm run start
 ```
-
-### Adding Features
-
-The codebase is organized into clear modules:
-
-- **Parser** (`backend/src/analyzer/parser.ts`): Handles TypeScript source code parsing
-- **Relationship Mapper** (`backend/src/analyzer/relationship-mapper.ts`): Builds entity relationships
-- **Graph Component** (`frontend/src/components/Graph.tsx`): D3.js visualization
-- **API Client** (`frontend/src/lib/api.ts`): Backend communication
-
-## Limitations
-
-- Currently supports only local project analysis (not remote URLs)
-- Requires TypeScript source files for full analysis
-- Large projects may take longer to analyze
-- Graph visualization works best with medium-sized codebases (50-500 entities)
-
-## Troubleshooting
-
-### No files found
-
-Ensure the path points to a directory containing TypeScript (.ts, .tsx) or JavaScript (.js, .jsx) files.
-
-### Graph not rendering
-
-Check browser console for errors. Ensure the project contains classes or interfaces to visualize.
-
-### Slow performance
-
-Try filtering to show fewer entity types, or analyze a specific subdirectory.
-
-## License
-
-MIT License
 
 ---
 
-Built with Deno, Next.js, and D3.js
+## Project Structure
+
+```text
+.
+├── backend/
+│   └── src/
+│       ├── analyzer/
+│       │   ├── parser.ts
+│       │   ├── relationship-mapper.ts
+│       │   ├── file-analyzer.ts
+│       │   ├── route-analyzer.ts
+│       │   └── schema-analyzer.ts
+│       ├── server/
+│       │   ├── handlers.ts
+│       │   └── server.ts
+│       ├── shared/
+│       │   └── types.ts
+│       └── cli.ts
+├── frontend/
+│   └── src/
+│       ├── app/
+│       │   ├── page.tsx
+│       │   └── page.css
+│       ├── components/
+│       │   ├── Graph.tsx
+│       │   ├── FileGraph.tsx
+│       │   ├── RouteTree.tsx
+│       │   ├── DatabaseSchema.tsx
+│       │   ├── NodeDetails.tsx
+│       │   ├── SearchBar.tsx
+│       │   └── ExportControls.tsx
+│       └── lib/
+│           └── api.ts
+├── shared/
+│   └── types.ts
+├── deno.json
+└── start.sh
+```
+
+
+
+---
+
+## Security + Runtime Notes
+
+- Path validation rejects traversal/system-protected prefixes.
+- Backend uses explicit CORS/security headers.
+- Backend requires Deno permissions: `--allow-read --allow-net --allow-env`.
+- This tool is intended for local analysis, not remote repository scanning.
+
+---
+
+## Limitations
+
+- Static-analysis heuristics may miss framework-specific edge cases.
+- Route and schema detection are best-effort for supported patterns.
+- Very large repositories can take longer to process and render.
+- File graph currently prioritizes tree readability over full edge density display.
+
+---
+
+## Troubleshooting
+
+### Route Tree is empty
+
+- Make sure the scan path is the project root.
+- Confirm route files exist (`app/`, `src/app/`, `pages/`, `src/pages/`, or Express-style route calls).
+
+### DB Schema is empty
+
+- Confirm a Prisma schema (`prisma/schema.prisma`) or Drizzle table definitions exist.
+
+### File Graph seems incomplete
+
+- Verify source files are under supported extensions: `.ts`, `.tsx`, `.js`, `.jsx`.
+- Re-run analysis using the repository root.
+
+### Backend not reachable
+
+- Ensure backend is running on `8000` and frontend on `3001`.
+- Check terminal logs for permission or path validation errors.
+
+![Code View](./oopgraph04.png)
+
+---
+
+## License
+
+MIT Licence
+
+---
