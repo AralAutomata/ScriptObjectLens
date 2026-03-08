@@ -44,7 +44,7 @@ export async function getEntityDetails(id: string): Promise<any> {
   return response.json();
 }
 
-export async function getFileContent(filePath: string): Promise<{ success: boolean; content?: string }> {
-  const response = await fetch(`${API_BASE}/file?path=${encodeURIComponent(filePath)}`);
+export async function getFileContent(analysisId: string, filePath: string): Promise<{ success: boolean; content?: string }> {
+  const response = await fetch(`${API_BASE}/file?analysisId=${encodeURIComponent(analysisId)}&path=${encodeURIComponent(filePath)}`);
   return response.json();
 }

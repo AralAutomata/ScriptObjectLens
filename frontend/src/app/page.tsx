@@ -146,11 +146,7 @@ export default function Home() {
     let nodes = result.graph.nodes;
     
     if (filterType !== 'all') {
-      if (filterType === 'abstract') {
-        nodes = nodes.filter(n => n.type === 'abstract');
-      } else {
-        nodes = nodes.filter(n => n.type === filterType);
-      }
+      nodes = nodes.filter(n => n.type === filterType);
     }
     
     if (searchQuery.trim()) {
@@ -267,6 +263,7 @@ export default function Home() {
           <NodeDetails
             node={selectedNode}
             result={result}
+            analysisId={result.id}
             onClose={() => setSelectedNode(null)}
           />
         )}

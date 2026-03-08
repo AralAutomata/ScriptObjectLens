@@ -11,13 +11,91 @@ interface Route {
   handler: (req: Request) => Promise<Response>;
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT = parseInt(Deno.env.get("RATE_LIMIT") || "100");
+const RATE_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_CLEANUP_INTERVAL = 300000;
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, record] of rateLimitMap) {
+    if (now > record.resetTime) {
+      rateLimitMap.delete(ip);
+    }
+  }
+}, RATE_LIMIT_CLEANUP_INTERVAL);
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const record = rateLimitMap.get(ip);
+  
+  if (!record || now > record.resetTime) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_WINDOW_MS });
+    return true;
+  }
+  
+  if (record.count >= RATE_LIMIT) {
+    return false;
+  }
+  
+  record.count++;
+  return true;
+}
+
+function validateAnalyzeRequest(body: unknown): { valid: boolean; error?: string } {
+  if (!body || typeof body !== "object") {
+    return { valid: false, error: "Invalid request body" };
+  }
+  
+  const obj = body as Record<string, unknown>;
+  
+  if (!obj.path || typeof obj.path !== "string") {
+    return { valid: false, error: "Path is required" };
+  }
+  
+  if (obj.path.length > 4096) {
+    return { valid: false, error: "Path too long" };
+  }
+  
+  if (obj.exclude && !Array.isArray(obj.exclude)) {
+    return { valid: false, error: "Exclude must be an array" };
+  }
+  
+  if (obj.include && !Array.isArray(obj.include)) {
+    return { valid: false, error: "Include must be an array" };
+  }
+  
+  return { valid: true };
+}
+
 const routes: Route[] = [
   {
     method: "POST",
     path: "/api/analyze",
     handler: async (req: Request) => {
       try {
+        const ip = req.headers.get("x-forwarded-for") || req.headers.get("cf-connecting-ip") || "unknown";
+        const corsHeaders = createCorsHeaders();
+        
+        if (!checkRateLimit(ip)) {
+          return new Response(JSON.stringify({ success: false, error: "Rate limit exceeded" }), {
+            headers: { "Content-Type": "application/json", ...corsHeaders },
+            status: 429
+          });
+        }
+        
         const body = await req.json();
+        
+        const validation = validateAnalyzeRequest(body);
+        if (!validation.valid) {
+          return new Response(JSON.stringify({ success: false, error: validation.error }), {
+            headers: { "Content-Type": "application/json", ...corsHeaders },
+            status: 400
+          });
+        }
+        
         const result = await analyzeProject({
           path: body.path,
           exclude: body.exclude,
@@ -25,12 +103,13 @@ const routes: Route[] = [
         });
         
         return new Response(JSON.stringify(result), {
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...corsHeaders },
           status: result.success ? 200 : 400
         });
       } catch (e) {
+        const corsHeaders = createCorsHeaders();
         return new Response(JSON.stringify({ success: false, error: e instanceof Error ? e.message : "Unknown error" }), {
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...corsHeaders },
           status: 500
         });
       }
@@ -40,17 +119,26 @@ const routes: Route[] = [
     method: "GET",
     path: "/api/result/:id",
     handler: async (req: Request) => {
+      const corsHeaders = createCorsHeaders();
       const id = req.url.split("/api/result/")[1];
+      
+      if (!id || !UUID_REGEX.test(id)) {
+        return new Response(JSON.stringify({ success: false, error: "Invalid ID format" }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 400
+        });
+      }
+      
       const result = getAnalysisResult(id);
       
       if (result) {
         return new Response(JSON.stringify({ success: true, result }), {
-          headers: { "Content-Type": "application/json" }
+          headers: { "Content-Type": "application/json", ...corsHeaders }
         });
       }
       
       return new Response(JSON.stringify({ success: false, error: "Analysis not found" }), {
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...corsHeaders },
         status: 404
       });
     }
@@ -59,17 +147,26 @@ const routes: Route[] = [
     method: "GET",
     path: "/api/entity/:id",
     handler: async (req: Request) => {
+      const corsHeaders = createCorsHeaders();
       const id = req.url.split("/api/entity/")[1];
+      
+      if (!id || !UUID_REGEX.test(id)) {
+        return new Response(JSON.stringify({ success: false, error: "Invalid ID format" }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 400
+        });
+      }
+      
       const details = getEntityDetails(id);
       
       if (details) {
         return new Response(JSON.stringify({ success: true, details }), {
-          headers: { "Content-Type": "application/json" }
+          headers: { "Content-Type": "application/json", ...corsHeaders }
         });
       }
       
       return new Response(JSON.stringify({ success: false, error: "Entity not found" }), {
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...corsHeaders },
         status: 404
       });
     }
@@ -78,37 +175,59 @@ const routes: Route[] = [
     method: "GET",
     path: "/api/file",
     handler: async (req: Request) => {
+      const corsHeaders = createCorsHeaders();
       const url = new URL(req.url);
+      const analysisId = url.searchParams.get("analysisId");
       const filePath = url.searchParams.get("path");
       
-      if (!filePath) {
-        return new Response(JSON.stringify({ success: false, error: "No file path provided" }), {
-          headers: { "Content-Type": "application/json" },
+      if (!analysisId || !UUID_REGEX.test(analysisId)) {
+        return new Response(JSON.stringify({ success: false, error: "Invalid or missing analysis ID" }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
           status: 400
         });
       }
       
-      const content = getFileContent(filePath);
+      if (!filePath) {
+        return new Response(JSON.stringify({ success: false, error: "No file path provided" }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 400
+        });
+      }
+      
+      if (filePath.length > 4096) {
+        return new Response(JSON.stringify({ success: false, error: "Path too long" }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 400
+        });
+      }
+      
+      const content = getFileContent(analysisId, filePath);
       
       if (content !== null) {
         return new Response(JSON.stringify({ success: true, content }), {
-          headers: { "Content-Type": "application/json" }
+          headers: { "Content-Type": "application/json", ...corsHeaders }
         });
       }
       
       return new Response(JSON.stringify({ success: false, error: "File not found" }), {
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...corsHeaders },
         status: 404
       });
     }
   }
 ];
 
+const ALLOWED_ORIGIN = Deno.env.get("ALLOWED_ORIGIN") || "http://localhost:3001";
+
 export function createCorsHeaders(): Record<string, string> {
   return {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type"
+    "Access-Control-Allow-Headers": "Content-Type",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "X-XSS-Protection": "1; mode=block",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains"
   };
 }
 

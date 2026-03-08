@@ -15,7 +15,7 @@ npm install
 echo ""
 echo "Starting API server (backend)..."
 cd ..
-deno run --allow-all backend/src/cli.ts &
+deno run --allow-read --allow-net --allow-env backend/src/cli.ts &
 BACKEND_PID=$!
 
 sleep 3

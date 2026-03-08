@@ -11,11 +11,71 @@ import {
 const parser = new TypeScriptParser();
 const mapper = new RelationshipMapper();
 
+const MAX_CACHE_SIZE = 100;
+const CACHE_TTL_MS = 3600000;
 const analysisCache: Map<string, AnalysisResult> = new Map();
+const analysisBasePaths: Map<string, string> = new Map();
+
+const BLOCKED_PREFIXES = [
+  "/etc", "/root", "/sys", "/proc", "/var", "/boot", "/dev", 
+  "/usr/bin", "/usr/sbin", "/bin", "/sbin", "/opt", "/mnt", "/media"
+];
+
+function validatePath(path: string): { valid: boolean; error?: string } {
+  if (!path || typeof path !== "string") {
+    return { valid: false, error: "Path is required" };
+  }
+
+  if (path.length > 4096) {
+    return { valid: false, error: "Path too long" };
+  }
+
+  let normalizedPath = path.replace(/\\/g, "/");
+  
+  normalizedPath = normalizedPath.replace(/%2e%2e/gi, "..")
+                                .replace(/%252e/gi, "..")
+                                .replace(/\.\./gi, "..");
+
+  normalizedPath = normalizedPath.replace(/\/+/g, "/");
+
+  if (normalizedPath.includes("..") || normalizedPath.includes("//")) {
+    return { valid: false, error: "Path traversal not allowed" };
+  }
+
+  if (BLOCKED_PREFIXES.some(prefix => normalizedPath.startsWith(prefix))) {
+    return { valid: false, error: "Access to system directories not allowed" };
+  }
+
+  return { valid: true };
+}
+
+function cleanupCache(): void {
+  const now = Date.now();
+  if (analysisCache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = analysisCache.keys().next().value;
+    if (oldestKey) {
+      analysisCache.delete(oldestKey);
+      analysisBasePaths.delete(oldestKey);
+    }
+  }
+  for (const [id, result] of analysisCache) {
+    if (now - result.timestamp > CACHE_TTL_MS) {
+      analysisCache.delete(id);
+      analysisBasePaths.delete(id);
+    }
+  }
+}
 
 export async function analyzeProject(request: AnalyzeRequest): Promise<AnalyzeResponse> {
   try {
     const scanPath = request.path;
+    
+    const pathValidation = validatePath(scanPath);
+    if (!pathValidation.valid) {
+      return { success: false, error: pathValidation.error };
+    }
+    
+    cleanupCache();
     
     await parser.parseDirectory(scanPath, {
       exclude: request.exclude,
@@ -26,6 +86,8 @@ export async function analyzeProject(request: AnalyzeRequest): Promise<AnalyzeRe
     const relationships = mapper.buildRelationships(classes);
     const graph = mapper.buildGraphData(classes, relationships);
 
+    const resolvedPath = Deno.realPathSync(scanPath);
+    
     const result: AnalysisResult = {
       id: crypto.randomUUID(),
       timestamp: Date.now(),
@@ -39,6 +101,7 @@ export async function analyzeProject(request: AnalyzeRequest): Promise<AnalyzeRe
     };
 
     analysisCache.set(result.id, result);
+    analysisBasePaths.set(result.id, resolvedPath);
 
     return { success: true, result };
   } catch (error) {
@@ -69,6 +132,28 @@ export function getEntityDetails(classId: string): EntityDetails | null {
   return null;
 }
 
-export function getFileContent(filePath: string): string | null {
+export function getFileContent(analysisId: string, filePath: string): string | null {
+  const pathValidation = validatePath(filePath);
+  if (!pathValidation.valid) {
+    return null;
+  }
+  
+  const basePath = analysisBasePaths.get(analysisId);
+  if (!basePath) {
+    return null;
+  }
+  
+  try {
+    const resolvedFilePath = Deno.realPathSync(filePath);
+    const normalizedBasePath = basePath.replace(/\\/g, "/");
+    const normalizedFilePath = resolvedFilePath.replace(/\\/g, "/");
+    
+    if (!normalizedFilePath.startsWith(normalizedBasePath + "/") && normalizedFilePath !== normalizedBasePath) {
+      return null;
+    }
+  } catch {
+    return null;
+  }
+  
   return parser.getSourceFileContent(filePath);
 }

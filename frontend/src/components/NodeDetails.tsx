@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getEntityDetails, getFileContent } from '@/lib/api';
 import Prism from 'prismjs';
+import DOMPurify from 'dompurify';
 import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-javascript';
 import 'prismjs/themes/prism-tomorrow.css';
@@ -39,10 +40,11 @@ interface AnalysisResult {
 interface NodeDetailsProps {
   node: GraphNode;
   result: AnalysisResult;
+  analysisId: string;
   onClose: () => void;
 }
 
-export default function NodeDetails({ node, result, onClose }: NodeDetailsProps) {
+export default function NodeDetails({ node, result, analysisId, onClose }: NodeDetailsProps) {
   const [classInfo, setClassInfo] = useState<ClassInfo | null>(null);
   const [relatedClasses, setRelatedClasses] = useState<ClassInfo[]>([]);
   const [relationships, setRelationships] = useState<any[]>([]);
@@ -91,7 +93,7 @@ export default function NodeDetails({ node, result, onClose }: NodeDetailsProps)
       });
       setRelatedClasses(result.classes.filter(c => relatedIds.has(c.id)));
 
-      getFileContent(info.filePath).then(res => {
+      getFileContent(analysisId, info.filePath).then(res => {
         if (res.success && res.content) {
           const lines = res.content.split('\n');
           const start = Math.max(0, info.startLine - 3);
@@ -219,11 +221,11 @@ export default function NodeDetails({ node, result, onClose }: NodeDetailsProps)
               <code 
                 className="language-typescript"
                 dangerouslySetInnerHTML={{
-                  __html: Prism.highlight(
+                  __html: DOMPurify.sanitize(Prism.highlight(
                     codeContent,
                     Prism.languages.typescript || Prism.languages.javascript,
                     'typescript'
-                  )
+                  ))
                 }}
               />
             </pre>

@@ -3,7 +3,11 @@ import { ClassInfo, MethodInfo, PropertyInfo, ParameterInfo, DecoratorInfo } fro
 
 function fileExists(path: string): boolean {
   try {
-    return Deno.statSync(path).isFile;
+    const stat = Deno.statSync(path);
+    if (stat.isSymlink) {
+      return false;
+    }
+    return stat.isFile;
   } catch {
     return false;
   }
@@ -11,9 +15,21 @@ function fileExists(path: string): boolean {
 
 function readFile(path: string): string | undefined {
   try {
+    const stat = Deno.statSync(path);
+    if (stat.isSymlink) {
+      return undefined;
+    }
     return Deno.readTextFileSync(path);
   } catch {
     return undefined;
+  }
+}
+
+function isSymlink(path: string): boolean {
+  try {
+    return Deno.lstatSync(path).isSymlink;
+  } catch {
+    return false;
   }
 }
 
@@ -91,10 +107,16 @@ export class TypeScriptParser {
 
   private async findFiles(dirPath: string, includes: string[], excludes: string[]): Promise<string[]> {
     const files: string[] = [];
+    const basePath = Deno.realPathSync(dirPath);
+    
     const walkDir = async (dir: string) => {
       try {
         for await (const entry of Deno.readDir(dir)) {
           const fullPath = `${dir}/${entry.name}`;
+          
+          if (isSymlink(fullPath)) {
+            continue;
+          }
           
           if (entry.isDirectory) {
             if (!excludes.some(exc => fullPath.includes(exc))) {
@@ -178,7 +200,8 @@ export class TypeScriptParser {
     const hasAbstractKeyword = modifiers?.some(m => m.kind === ts.SyntaxKind.AbstractKeyword) || false;
     
     // Also detect abstract by naming convention (Base, Abstract prefixes)
-    const isAbstractByName = /^Base|^Abstract/.test(name);
+    // Use word boundary to avoid false positives like "BaseballTeam", "Baseline"
+    const isAbstractByName = /^(?:Base|Abstract)(?=[A-Z])/.test(name);
     
     // Class is abstract if it has abstract keyword OR follows naming convention
     const isAbstract = hasAbstractKeyword || isAbstractByName;
