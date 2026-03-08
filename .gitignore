@@ -86,3 +86,4 @@ service-account*.json
 
 # Local agent instructions (do not commit)
 AGENTS.md
+QWEN.md

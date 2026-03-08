@@ -2,12 +2,13 @@
 
 Local-first architecture explorer for TypeScript/JavaScript projects.
 
-It combines a Deno analysis backend with a Next.js + D3 frontend and now ships with four analysis tabs:
+It combines a Deno analysis backend with a Next.js + D3 frontend and now ships with five analysis tabs:
 
 1. **Classes**: OOP relationship graph + cluster/table view
 2. **File Graph**: hierarchical import-aware file tree
 3. **Route Tree**: discovered HTTP/page routes (Next.js + Express-style)
 4. **DB Schema**: Prisma/Drizzle model and relation map
+5. **Architecture Diff**: compare code structure between git references
 
 ![Code Panel](./oopgraph05.png)
 
@@ -58,6 +59,25 @@ It combines a Deno analysis backend with a Next.js + D3 frontend and now ships w
 - Directed relation rendering with type-aware styling
 
 ![File Graph View](./oopgraph09.png)
+
+### 5) Architecture Diff Tab (NEW)
+
+- Compare code structure between any two git references (branches, tags, commits)
+- Side-by-side graph visualization with synchronized zoom/pan
+- Entity change detection:
+  - **Added**: new classes, interfaces, enums, type aliases, functions
+  - **Removed**: deleted entities
+  - **Modified**: changed methods, properties, inheritance
+- Relationship change tracking:
+  - New dependencies and imports
+  - Broken relationships from removed code
+- Impact analysis showing affected dependencies
+- Filter controls for change types (added/removed/modified)
+- Dual view modes:
+  - **Graph**: side-by-side architecture comparison
+  - **List**: detailed change list with entity breakdown
+
+![Git Graph View](./oopgraph10.png)
 
 ---
 
@@ -131,10 +151,18 @@ npm run dev
    - `File Graph`
    - `Route Tree`
    - `DB Schema`
+   - `Architecture Diff`
 
 ### Path recommendation
 
 Use your **project root** path (not a deep subdirectory) for best route/schema/file discovery.
+
+### Git repository requirement
+
+The **Architecture Diff** tab requires the project to be a valid Git repository. Use it to compare:
+- Different branches (e.g., `main` → `feature-branch`)
+- Tags (e.g., `v1.0.0` → `v2.0.0`)
+- Commits (e.g., `HEAD~1` → `HEAD`)
 
 ---
 
@@ -149,6 +177,8 @@ Use your **project root** path (not a deep subdirectory) for best route/schema/f
 | `/api/filegraph?path=...` | GET | Build file import graph |
 | `/api/routes?path=...` | GET | Discover route tree |
 | `/api/schema?path=...` | GET | Parse DB schema |
+| `/api/arch-diff` | POST | Compare architecture between git refs |
+| `/api/git-refs?path=...` | GET | List branches and tags for a repository |
 
 ### `POST /api/analyze` body
 
@@ -159,6 +189,22 @@ Use your **project root** path (not a deep subdirectory) for best route/schema/f
   "include": ["**/*.ts", "**/*.tsx"]
 }
 ```
+
+### `POST /api/arch-diff` body
+
+```json
+{
+  "path": "/absolute/path/to/git-repo",
+  "from": "main",
+  "to": "feature-branch"
+}
+```
+
+**Response includes:**
+- `entities.added/removed/modified`: Changed classes, interfaces, etc.
+- `relationships.added/removed`: New and broken dependencies
+- `summary`: Statistics about total changes
+- `beforeSnapshot`/`afterSnapshot`: Full analysis data for visualization
 
 ---
 
@@ -197,6 +243,10 @@ npm run start
 │       │   ├── file-analyzer.ts
 │       │   ├── route-analyzer.ts
 │       │   └── schema-analyzer.ts
+│       ├── git/
+│       │   ├── git-client.ts         # Git operations (NEW)
+│       │   ├── git-types.ts          # Git types (NEW)
+│       │   └── diff-analyzer.ts      # Architecture diff logic (NEW)
 │       ├── server/
 │       │   ├── handlers.ts
 │       │   └── server.ts
@@ -215,7 +265,12 @@ npm run start
 │       │   ├── DatabaseSchema.tsx
 │       │   ├── NodeDetails.tsx
 │       │   ├── SearchBar.tsx
-│       │   └── ExportControls.tsx
+│       │   ├── ExportControls.tsx
+│       │   ├── RefSelector.tsx       # Git ref picker (NEW)
+│       │   ├── DiffSummary.tsx       # Change statistics (NEW)
+│       │   ├── SideBySideGraph.tsx   # Dual graph view (NEW)
+│       │   ├── ChangeList.tsx        # Change list (NEW)
+│       │   └── ArchitectureDiff.tsx  # Main diff component (NEW)
 │       └── lib/
 │           └── api.ts
 ├── shared/
@@ -232,7 +287,8 @@ npm run start
 
 - Path validation rejects traversal/system-protected prefixes.
 - Backend uses explicit CORS/security headers.
-- Backend requires Deno permissions: `--allow-read --allow-net --allow-env`.
+- Backend requires Deno permissions: `--allow-read --allow-write --allow-net --allow-env --allow-run`.
+- The `--allow-run` permission is required for Git operations (Architecture Diff feature).
 - This tool is intended for local analysis, not remote repository scanning.
 
 ---
@@ -262,10 +318,17 @@ npm run start
 - Verify source files are under supported extensions: `.ts`, `.tsx`, `.js`, `.jsx`.
 - Re-run analysis using the repository root.
 
+### Architecture Diff shows "Not a valid git repository"
+
+- Ensure the project path is a valid Git repository (has `.git` directory).
+- Check that Git is installed and accessible from the command line.
+- The backend requires `--allow-run` permission to execute Git commands.
+
 ### Backend not reachable
 
 - Ensure backend is running on `8000` and frontend on `3001`.
 - Check terminal logs for permission or path validation errors.
+- Run `./start.sh` which handles proper cleanup and startup.
 
 ![Code View](./oopgraph04.png)
 
