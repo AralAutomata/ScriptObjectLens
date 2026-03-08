@@ -285,6 +285,7 @@ export function startServer(port: number = 8000): void {
   
   Deno.serve({
     port,
+    hostname: "127.0.0.1",
     handler: handleRequest
   });
   

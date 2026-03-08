@@ -23,7 +23,7 @@ sleep 3
 echo ""
 echo "Starting frontend development server..."
 cd frontend
-npm run dev &
+npm run dev -- -H localhost &
 FRONTEND_PID=$!
 
 sleep 3

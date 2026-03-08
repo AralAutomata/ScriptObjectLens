@@ -83,6 +83,9 @@ export class TypeScriptParser {
       ".git", 
       ".cache",
       "deno",
+      ".next",
+      ".nuxt",
+      ".output",
       ...(options?.exclude || [])
     ];
 
@@ -429,8 +432,8 @@ export class TypeScriptParser {
   }
 
   private generateId(name: string, filePath: string): string {
-    const fileName = filePath.split('/').pop()?.replace(/\.[^/.]+$/, "") || "unknown";
-    return `${fileName}_${name}`;
+    const pathHash = filePath.split('/').slice(-3, -1).join('_').replace(/[^a-zA-Z0-9]/g, '_');
+    return `${pathHash}_${name}`;
   }
 
   getSourceFileContent(filePath: string): string | null {
