@@ -1,11 +1,17 @@
 import { TypeScriptParser } from "../analyzer/parser.ts";
 import { RelationshipMapper } from "../analyzer/relationship-mapper.ts";
+import { analyzeFileGraph } from "../analyzer/file-analyzer.ts";
+import { analyzeRouteTree } from "../analyzer/route-analyzer.ts";
+import { analyzeDatabaseSchema } from "../analyzer/schema-analyzer.ts";
 import {
   AnalysisResult,
   AnalyzeRequest,
   AnalyzeResponse,
   EntityDetails,
-  ClassInfo
+  ClassInfo,
+  FileGraphResponse,
+  RouteTreeResponse,
+  DatabaseSchemaResponse
 } from "../shared/types.ts";
 
 const parser = new TypeScriptParser();
@@ -160,4 +166,55 @@ export function getFileContent(analysisId: string, filePath: string): string | n
   }
 
   return parser.getSourceFileContent(filePath);
+}
+
+export async function getFileGraph(scanPath: string): Promise<FileGraphResponse> {
+  try {
+    const pathValidation = validatePath(scanPath);
+    if (!pathValidation.valid) {
+      return { success: false, error: pathValidation.error };
+    }
+
+    const data = await analyzeFileGraph(scanPath);
+    return { success: true, data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to analyze file graph"
+    };
+  }
+}
+
+export async function getRouteTree(scanPath: string): Promise<RouteTreeResponse> {
+  try {
+    const pathValidation = validatePath(scanPath);
+    if (!pathValidation.valid) {
+      return { success: false, error: pathValidation.error };
+    }
+
+    const data = await analyzeRouteTree(scanPath);
+    return { success: true, data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to analyze route tree"
+    };
+  }
+}
+
+export async function getDatabaseSchema(scanPath: string): Promise<DatabaseSchemaResponse> {
+  try {
+    const pathValidation = validatePath(scanPath);
+    if (!pathValidation.valid) {
+      return { success: false, error: pathValidation.error };
+    }
+
+    const data = await analyzeDatabaseSchema(scanPath);
+    return { success: true, data };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to analyze database schema"
+    };
+  }
 }

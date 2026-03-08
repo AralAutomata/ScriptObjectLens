@@ -115,3 +115,90 @@ export interface EntityDetails {
   relatedClasses: ClassInfo[];
   relationships: Relationship[];
 }
+
+// File Graph Types
+export type FileNodeType = 'page' | 'api' | 'component' | 'lib' | 'config' | 'util'
+
+export interface FileNode {
+  id: string;
+  path: string;
+  name: string;
+  type: FileNodeType;
+  size: number;
+  extension: string;
+}
+
+export interface FileEdge {
+  source: string;
+  target: string;
+  type: 'import' | 'dynamic';
+}
+
+export interface FileGraphData {
+  nodes: FileNode[];
+  edges: FileEdge[];
+}
+
+export interface FileGraphResponse {
+  success: boolean;
+  data?: FileGraphData;
+  error?: string;
+}
+
+// Route Tree Types
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS' | 'ALL'
+
+export interface RouteNode {
+  id: string;
+  path: string;
+  segment: string;
+  fullPath: string;
+  method: HttpMethod;
+  type: 'page' | 'api' | 'layout' | 'middleware';
+  filePath: string;
+  children: RouteNode[];
+}
+
+export interface RouteTreeResponse {
+  success: boolean;
+  data?: RouteNode[];
+  error?: string;
+}
+
+// Database Schema Types
+export interface SchemaField {
+  name: string;
+  type: string;
+  isId: boolean;
+  isOptional: boolean;
+  isUnique: boolean;
+  defaultValue?: string;
+  isRelation: boolean;
+}
+
+export interface SchemaModel {
+  id: string;
+  name: string;
+  fields: SchemaField[];
+  dbName?: string;
+}
+
+export interface SchemaRelation {
+  source: string;
+  target: string;
+  sourceField: string;
+  targetField: string;
+  type: 'one-to-one' | 'one-to-many' | 'many-to-many' | 'many-to-one';
+}
+
+export interface DatabaseSchema {
+  models: SchemaModel[];
+  relations: SchemaRelation[];
+  type: 'prisma' | 'drizzle';
+}
+
+export interface DatabaseSchemaResponse {
+  success: boolean;
+  data?: DatabaseSchema;
+  error?: string;
+}

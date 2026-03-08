@@ -2,7 +2,10 @@ import {
   analyzeProject, 
   getAnalysisResult, 
   getEntityDetails, 
-  getFileContent 
+  getFileContent,
+  getFileGraph,
+  getRouteTree,
+  getDatabaseSchema
 } from "./handlers.ts";
 
 interface Route {
@@ -212,6 +215,96 @@ const routes: Route[] = [
       return new Response(JSON.stringify({ success: false, error: "File not found" }), {
         headers: { "Content-Type": "application/json", ...corsHeaders },
         status: 404
+      });
+    }
+  },
+  {
+    method: "GET",
+    path: "/api/filegraph",
+    handler: async (req: Request) => {
+      const corsHeaders = createCorsHeaders();
+      const url = new URL(req.url);
+      const scanPath = url.searchParams.get("path");
+      
+      if (!scanPath) {
+        return new Response(JSON.stringify({ success: false, error: "Path parameter is required" }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 400
+        });
+      }
+      
+      if (scanPath.length > 4096) {
+        return new Response(JSON.stringify({ success: false, error: "Path too long" }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 400
+        });
+      }
+      
+      const result = await getFileGraph(scanPath);
+      
+      return new Response(JSON.stringify(result), {
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+        status: result.success ? 200 : 400
+      });
+    }
+  },
+  {
+    method: "GET",
+    path: "/api/routes",
+    handler: async (req: Request) => {
+      const corsHeaders = createCorsHeaders();
+      const url = new URL(req.url);
+      const scanPath = url.searchParams.get("path");
+      
+      if (!scanPath) {
+        return new Response(JSON.stringify({ success: false, error: "Path parameter is required" }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 400
+        });
+      }
+      
+      if (scanPath.length > 4096) {
+        return new Response(JSON.stringify({ success: false, error: "Path too long" }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 400
+        });
+      }
+      
+      const result = await getRouteTree(scanPath);
+      
+      return new Response(JSON.stringify(result), {
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+        status: result.success ? 200 : 400
+      });
+    }
+  },
+  {
+    method: "GET",
+    path: "/api/schema",
+    handler: async (req: Request) => {
+      const corsHeaders = createCorsHeaders();
+      const url = new URL(req.url);
+      const scanPath = url.searchParams.get("path");
+      
+      if (!scanPath) {
+        return new Response(JSON.stringify({ success: false, error: "Path parameter is required" }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 400
+        });
+      }
+      
+      if (scanPath.length > 4096) {
+        return new Response(JSON.stringify({ success: false, error: "Path too long" }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 400
+        });
+      }
+      
+      const result = await getDatabaseSchema(scanPath);
+      
+      return new Response(JSON.stringify(result), {
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+        status: result.success ? 200 : 400
       });
     }
   }

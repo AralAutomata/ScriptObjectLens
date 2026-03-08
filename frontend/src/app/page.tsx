@@ -1,11 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { analyzeProject, AnalyzeResponse } from '@/lib/api';
+import { useMemo, useState, useCallback } from 'react';
+import { analyzeProject, AnalyzeResponse, fetchFileGraph, fetchRouteTree, fetchDatabaseSchema } from '@/lib/api';
 import Graph from '@/components/Graph';
 import NodeDetails from '@/components/NodeDetails';
 import SearchBar from '@/components/SearchBar';
 import ExportControls from '@/components/ExportControls';
+import FileGraph from '@/components/FileGraph';
+import RouteTree from '@/components/RouteTree';
+import DatabaseSchema from '@/components/DatabaseSchema';
 import './page.css';
 
 type NodeType = 'class' | 'interface' | 'abstract' | 'enum' | 'typeAlias' | 'function';
@@ -13,6 +16,21 @@ type RelationFilter = 'all' | 'inheritance' | 'dependency' | 'imports';
 type DegreeFilter = 'all' | 'high' | 'cycle';
 type EdgeType = 'extends' | 'implements' | 'composition' | 'uses' | 'imports';
 type ViewMode = 'graph' | 'clusters';
+type ActiveTab = 'classes' | 'filegraph' | 'routes' | 'schema';
+
+interface FileGraphData {
+  nodes: any[];
+  edges: any[];
+}
+
+interface RouteTreeData {
+  routes: any[];
+}
+
+interface DatabaseSchemaData {
+  models: any[];
+  relations: any[];
+}
 
 interface MethodInfo {
   name: string;
@@ -108,6 +126,20 @@ export default function Home() {
   const [degreeFilter, setDegreeFilter] = useState<DegreeFilter>('all');
   const [simpleMode, setSimpleMode] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('graph');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('classes');
+
+  // Tab data states
+  const [fileGraphData, setFileGraphData] = useState<FileGraphData | null>(null);
+  const [routeTreeData, setRouteTreeData] = useState<RouteTreeData | null>(null);
+  const [databaseSchemaData, setDatabaseSchemaData] = useState<DatabaseSchemaData | null>(null);
+
+  // Tab loading states
+  const [tabLoading, setTabLoading] = useState<Record<ActiveTab, boolean>>({
+    classes: false,
+    filegraph: false,
+    routes: false,
+    schema: false,
+  });
 
   const isHighDegree = (node: GraphNode): boolean => ((node.inDegree || 0) + (node.outDegree || 0)) >= 3;
 
@@ -195,6 +227,56 @@ export default function Home() {
     } finally {
       setAnalyzing(false);
     }
+  };
+
+  const loadTabData = useCallback(async (tab: ActiveTab) => {
+    if (tab === 'classes' || tabLoading[tab]) return;
+
+    setTabLoading(prev => ({ ...prev, [tab]: true }));
+
+    try {
+      switch (tab) {
+        case 'filegraph':
+          if (!fileGraphData) {
+            const response = await fetchFileGraph(scanPath);
+            if (response.success && response.data) {
+              setFileGraphData(response.data);
+            }
+          }
+          break;
+        case 'routes':
+          if (!routeTreeData) {
+            console.log('[Page] Fetching route tree for:', scanPath);
+            const response = await fetchRouteTree(scanPath);
+            console.log('[Page] Route tree response:', response);
+            if (response.success && response.data) {
+              console.log('[Page] Setting route tree data, routes count:', response.data.length);
+              setRouteTreeData({ routes: response.data });
+            }
+          }
+          break;
+        case 'schema':
+          if (!databaseSchemaData) {
+            console.log('[Page] Fetching database schema for:', scanPath);
+            const response = await fetchDatabaseSchema(scanPath);
+            console.log('[Page] Database schema response:', response);
+            if (response.success && response.data) {
+              console.log('[Page] Setting database schema data, models count:', response.data.models?.length);
+              setDatabaseSchemaData(response.data);
+            }
+          }
+          break;
+      }
+    } catch (err) {
+      console.error(`Failed to load ${tab}:`, err);
+    } finally {
+      setTabLoading(prev => ({ ...prev, [tab]: false }));
+    }
+  }, [scanPath, fileGraphData, routeTreeData, databaseSchemaData, tabLoading]);
+
+  const handleTabChange = (tab: ActiveTab) => {
+    setActiveTab(tab);
+    loadTabData(tab);
   };
 
   const getFilteredNodes = (): GraphNode[] => {
@@ -444,82 +526,179 @@ export default function Home() {
         </div>
 
         <div className="graph-container">
-          {result && filteredNodes.length > 0 ? (
-            viewMode === 'graph' ? (
-              <Graph
-                nodes={filteredNodes}
-                edges={filteredEdges}
-                onNodeClick={setSelectedNode}
-                simpleMode={simpleMode}
-                selectedNodeId={selectedNode?.id}
-              />
-            ) : (
-              <div className="cluster-view">
-                {clusteredData.map((cluster) => {
-                  const summary = [
-                    cluster.relationBreakdown.extends > 0 ? `Extends: ${cluster.relationBreakdown.extends}` : null,
-                    cluster.relationBreakdown.implements > 0 ? `Implements: ${cluster.relationBreakdown.implements}` : null,
-                    cluster.relationBreakdown.composition > 0 ? `Composition: ${cluster.relationBreakdown.composition}` : null,
-                    cluster.relationBreakdown.uses > 0 ? `Uses: ${cluster.relationBreakdown.uses}` : null,
-                    cluster.relationBreakdown.imports > 0 ? `Imports: ${cluster.relationBreakdown.imports}` : null
-                  ].filter(Boolean) as string[];
-
-                  return (
-                    <section className="cluster-card" key={`cluster-${cluster.clusterId}`}>
-                      <header className="cluster-header">
-                        <h3>Cluster {cluster.clusterId}</h3>
-                        <p>
-                          {cluster.nodes.length} nodes
-                          {cluster.internalEdges > 0 ? ` • ${cluster.internalEdges} internal edges` : ''}
-                          {cluster.externalEdges > 0 ? ` • ${cluster.externalEdges} external edges` : ''}
-                        </p>
-                      </header>
-                      {cluster.cycleCount > 0 ? (
-                        <div className="cluster-meta">
-                          {cluster.cycleCount} cycle node{cluster.cycleCount > 1 ? 's' : ''}
-                        </div>
-                      ) : null}
-                      {summary.length > 0 ? (
-                        <div className="cluster-meta">
-                          {summary.join(' • ')}
-                        </div>
-                      ) : null}
-                      <div className="cluster-table">
-                        <div className="cluster-table-head">
-                          <span className="cluster-cell cluster-cell-type">Type</span>
-                          <span className="cluster-cell cluster-cell-name">Node</span>
-                          <span className="cluster-cell">In</span>
-                          <span className="cluster-cell">Out</span>
-                          <span className="cluster-cell cluster-cell-flags">Tags</span>
-                        </div>
-                        {cluster.nodes.map((node, index) => (
-                          <button
-                            key={`${cluster.clusterId}-${node.id}-${index}`}
-                            className="cluster-node-row"
-                            type="button"
-                            onClick={() => setSelectedNode(node)}
-                            aria-label={`Open ${node.label} details`}
-                          >
-                            <span className={`cluster-node-type ${node.type === 'typeAlias' ? 'typealias' : node.type}`}>
-                              {node.type.slice(0, 1).toUpperCase()}
-                            </span>
-                            <span className="cluster-node-name">{node.label}</span>
-                            <span className="cluster-cell cluster-cell-number">{node.inDegree || 0}</span>
-                            <span className="cluster-cell cluster-cell-number">{node.outDegree || 0}</span>
-                            <span className="cluster-cell cluster-cell-flags">
-                              {node.isCycleNode ? 'cycle' : ' '}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
-                    </section>
-                  );
-                })}
+          {result ? (
+            <div className="tabs-container">
+              <div className="tabs-header">
+                <button
+                  className={`tab-button ${activeTab === 'classes' ? 'active' : ''}`}
+                  onClick={() => handleTabChange('classes')}
+                >
+                  Classes
+                </button>
+                <button
+                  className={`tab-button ${activeTab === 'filegraph' ? 'active' : ''} ${tabLoading.filegraph ? 'loading' : ''}`}
+                  onClick={() => handleTabChange('filegraph')}
+                  disabled={tabLoading.filegraph}
+                >
+                  File Graph
+                  {tabLoading.filegraph && <span className="tab-spinner" />}
+                </button>
+                <button
+                  className={`tab-button ${activeTab === 'routes' ? 'active' : ''} ${tabLoading.routes ? 'loading' : ''}`}
+                  onClick={() => handleTabChange('routes')}
+                  disabled={tabLoading.routes}
+                >
+                  Route Tree
+                  {tabLoading.routes && <span className="tab-spinner" />}
+                </button>
+                <button
+                  className={`tab-button ${activeTab === 'schema' ? 'active' : ''} ${tabLoading.schema ? 'loading' : ''}`}
+                  onClick={() => handleTabChange('schema')}
+                  disabled={tabLoading.schema}
+                >
+                  DB Schema
+                  {tabLoading.schema && <span className="tab-spinner" />}
+                </button>
               </div>
-            )
-          ) : result ? (
-            <div className="no-results">
-              <p>No classes or interfaces match your search.</p>
+
+              <div className="tab-content-wrapper">
+                {activeTab === 'classes' && (
+                  <>
+                    {filteredNodes.length > 0 ? (
+                      viewMode === 'graph' ? (
+                        <Graph
+                          nodes={filteredNodes}
+                          edges={filteredEdges}
+                          onNodeClick={setSelectedNode}
+                          simpleMode={simpleMode}
+                          selectedNodeId={selectedNode?.id}
+                        />
+                      ) : (
+                        <div className="cluster-view">
+                          {clusteredData.map((cluster) => {
+                            const summary = [
+                              cluster.relationBreakdown.extends > 0 ? `Extends: ${cluster.relationBreakdown.extends}` : null,
+                              cluster.relationBreakdown.implements > 0 ? `Implements: ${cluster.relationBreakdown.implements}` : null,
+                              cluster.relationBreakdown.composition > 0 ? `Composition: ${cluster.relationBreakdown.composition}` : null,
+                              cluster.relationBreakdown.uses > 0 ? `Uses: ${cluster.relationBreakdown.uses}` : null,
+                              cluster.relationBreakdown.imports > 0 ? `Imports: ${cluster.relationBreakdown.imports}` : null
+                            ].filter(Boolean) as string[];
+
+                            return (
+                              <section className="cluster-card" key={`cluster-${cluster.clusterId}`}>
+                                <header className="cluster-header">
+                                  <h3>Cluster {cluster.clusterId}</h3>
+                                  <p>
+                                    {cluster.nodes.length} nodes
+                                    {cluster.internalEdges > 0 ? ` • ${cluster.internalEdges} internal edges` : ''}
+                                    {cluster.externalEdges > 0 ? ` • ${cluster.externalEdges} external edges` : ''}
+                                  </p>
+                                </header>
+                                {cluster.cycleCount > 0 ? (
+                                  <div className="cluster-meta">
+                                    {cluster.cycleCount} cycle node{cluster.cycleCount > 1 ? 's' : ''}
+                                  </div>
+                                ) : null}
+                                {summary.length > 0 ? (
+                                  <div className="cluster-meta">
+                                    {summary.join(' • ')}
+                                  </div>
+                                ) : null}
+                                <div className="cluster-table">
+                                  <div className="cluster-table-head">
+                                    <span className="cluster-cell cluster-cell-type">Type</span>
+                                    <span className="cluster-cell cluster-cell-name">Node</span>
+                                    <span className="cluster-cell">In</span>
+                                    <span className="cluster-cell">Out</span>
+                                    <span className="cluster-cell cluster-cell-flags">Tags</span>
+                                  </div>
+                                  {cluster.nodes.map((node, index) => (
+                                    <button
+                                      key={`${cluster.clusterId}-${node.id}-${index}`}
+                                      className="cluster-node-row"
+                                      type="button"
+                                      onClick={() => setSelectedNode(node)}
+                                      aria-label={`Open ${node.label} details`}
+                                    >
+                                      <span className={`cluster-node-type ${node.type === 'typeAlias' ? 'typealias' : node.type}`}>
+                                        {node.type.slice(0, 1).toUpperCase()}
+                                      </span>
+                                      <span className="cluster-node-name">{node.label}</span>
+                                      <span className="cluster-cell cluster-cell-number">{node.inDegree || 0}</span>
+                                      <span className="cluster-cell cluster-cell-number">{node.outDegree || 0}</span>
+                                      <span className="cluster-cell cluster-cell-flags">
+                                        {node.isCycleNode ? 'cycle' : ' '}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </section>
+                            );
+                          })}
+                        </div>
+                      )
+                    ) : (
+                      <div className="no-results">
+                        <p>No classes or interfaces match your search.</p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {activeTab === 'filegraph' && (
+                  <>
+                    {tabLoading.filegraph ? (
+                      <div className="tab-loading">
+                        <div className="tab-spinner" />
+                        <p>Loading file graph...</p>
+                      </div>
+                    ) : fileGraphData ? (
+                      <FileGraph nodes={fileGraphData.nodes} edges={fileGraphData.edges} />
+                    ) : (
+                      <div className="tab-placeholder">
+                        <p>Click to load file graph</p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {activeTab === 'routes' && (
+                  <>
+                    {tabLoading.routes ? (
+                      <div className="tab-loading">
+                        <div className="tab-spinner" />
+                        <p>Loading route tree...</p>
+                      </div>
+                    ) : routeTreeData ? (
+                      <RouteTree routes={routeTreeData.routes} />
+                    ) : (
+                      <div className="tab-placeholder">
+                        <p>Click to load route tree</p>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {activeTab === 'schema' && (
+                  <>
+                    {tabLoading.schema ? (
+                      <div className="tab-loading">
+                        <div className="tab-spinner" />
+                        <p>Loading database schema...</p>
+                      </div>
+                    ) : databaseSchemaData ? (
+                      <DatabaseSchema
+                        models={databaseSchemaData.models}
+                        relations={databaseSchemaData.relations}
+                      />
+                    ) : (
+                      <div className="tab-placeholder">
+                        <p>Click to load database schema</p>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           ) : (
             <div className="placeholder">

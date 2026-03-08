@@ -1,8 +1,12 @@
 /** @type {import('next').NextConfig} */
-const API_URL = process.env.API_URL || 'http://localhost:8000';
+const API_URL = process.env.API_URL || 'http://localhost:8001';
 
 const nextConfig = {
   reactStrictMode: true,
+  output: 'standalone',
+  env: {
+    NEXT_TELEMETRY_DISABLED: '1',
+  },
   async rewrites() {
     return [
       {
@@ -10,6 +14,10 @@ const nextConfig = {
         destination: `${API_URL}/api/:path*`,
       },
     ];
+  },
+  // Disable image optimization to avoid external CDN calls
+  images: {
+    unoptimized: true,
   },
 };
 
