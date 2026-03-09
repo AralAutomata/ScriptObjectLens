@@ -70,7 +70,7 @@ export class RelationshipMapper {
       references.forEach(typeName => {
         const target = this.findClassByName(typeName);
         if (target) {
-          const edgeType: Relationship["type"] = classInfo.type === "class" ? "uses" : "uses";
+          const edgeType: Relationship["type"] = "uses";
           addRelationship(source, target.id, edgeType, classInfo.filePath);
         }
       });

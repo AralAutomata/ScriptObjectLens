@@ -126,8 +126,13 @@ export default function SideBySideGraph({ diff, onNodeClick }: SideBySideGraphPr
     });
 
     // Render both graphs
-    renderGraph(beforeSvgRef.current, beforeNodes, beforeEdges, dimensions, 'before', onNodeClick);
-    renderGraph(afterSvgRef.current, afterNodes, afterEdges, dimensions, 'after', onNodeClick);
+    const beforeSim = renderGraph(beforeSvgRef.current, beforeNodes, beforeEdges, dimensions, 'before', onNodeClick);
+    const afterSim = renderGraph(afterSvgRef.current, afterNodes, afterEdges, dimensions, 'after', onNodeClick);
+
+    return () => {
+      beforeSim?.stop();
+      afterSim?.stop();
+    };
   }, [diff, dimensions, onNodeClick]);
 
   return (
@@ -181,7 +186,7 @@ function renderGraph(
   dimensions: { width: number; height: number },
   side: 'before' | 'after',
   onNodeClick?: (node: any, side: 'before' | 'after') => void
-) {
+): d3.Simulation<GraphNode, GraphEdge> | null {
   const svg = d3.select(svgElement);
   svg.selectAll('*').remove();
 
@@ -296,4 +301,6 @@ function renderGraph(
 
     node.attr('transform', d => `translate(${d.x || 0},${d.y || 0})`);
   });
+
+  return simulation;
 }

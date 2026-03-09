@@ -19,8 +19,13 @@ import {
   GitRefsResponse
 } from "../shared/types.ts";
 
-const parser = new TypeScriptParser();
-const mapper = new RelationshipMapper();
+// Per-request instances to avoid shared mutable state between concurrent requests
+function createAnalyzer() {
+  return {
+    parser: new TypeScriptParser(),
+    mapper: new RelationshipMapper()
+  }
+}
 
 const MAX_CACHE_SIZE = 100;
 const CACHE_TTL_MS = 3600000;
@@ -62,17 +67,21 @@ function validatePath(path: string): { valid: boolean; error?: string } {
 
 function cleanupCache(): void {
   const now = Date.now();
-  if (analysisCache.size >= MAX_CACHE_SIZE) {
-    const oldestKey = analysisCache.keys().next().value;
-    if (oldestKey) {
-      analysisCache.delete(oldestKey);
-      analysisBasePaths.delete(oldestKey);
-    }
-  }
+  // Evict expired entries first
   for (const [id, result] of analysisCache) {
     if (now - result.timestamp > CACHE_TTL_MS) {
       analysisCache.delete(id);
       analysisBasePaths.delete(id);
+    }
+  }
+  // Evict oldest entries until under limit
+  while (analysisCache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = analysisCache.keys().next().value;
+    if (oldestKey) {
+      analysisCache.delete(oldestKey);
+      analysisBasePaths.delete(oldestKey);
+    } else {
+      break;
     }
   }
 }
@@ -87,6 +96,8 @@ export async function analyzeProject(request: AnalyzeRequest): Promise<AnalyzeRe
     }
 
     cleanupCache();
+
+    const { parser, mapper } = createAnalyzer()
 
     await parser.parseDirectory(scanPath, {
       exclude: request.exclude,
@@ -106,7 +117,7 @@ export async function analyzeProject(request: AnalyzeRequest): Promise<AnalyzeRe
       classes,
       relationships,
       graph,
-      totalFiles: parser["sourceFiles"]?.size || 0,
+      totalFiles: parser.getSourceFileCount(),
       totalClasses: classes.filter(c => c.type === "class" || c.type === "abstract").length,
       totalInterfaces: classes.filter(c => c.type === "interface").length,
       totalEnums: classes.filter(c => c.type === "enum").length,
@@ -136,6 +147,7 @@ export function getAnalysisResult(id: string): AnalysisResult | undefined {
 }
 
 export function getEntityDetails(classId: string): EntityDetails | null {
+  const { mapper } = createAnalyzer()
   for (const result of analysisCache.values()) {
     const classInfo = result.classes.find(c => c.id === classId);
     if (classInfo) {
@@ -170,7 +182,11 @@ export function getFileContent(analysisId: string, filePath: string): string | n
     return null;
   }
 
-  return parser.getSourceFileContent(filePath);
+  try {
+    return Deno.readTextFileSync(filePath);
+  } catch {
+    return null;
+  }
 }
 
 export async function getFileGraph(scanPath: string): Promise<FileGraphResponse> {

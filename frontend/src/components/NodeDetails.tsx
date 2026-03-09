@@ -86,15 +86,18 @@ export default function NodeDetails({ node, result, analysisId, onClose }: NodeD
   }, [isResizing]);
 
   useEffect(() => {
+    let cancelled = false;
+    setCodeContent(null);
+
     const info = result.classes.find(c => c.id === node.id);
     if (info) {
       setClassInfo(info);
-      
-      const related = result.relationships.filter(r => 
+
+      const related = result.relationships.filter(r =>
         r.source === node.id || r.target === node.id
       );
       setRelationships(related);
-      
+
       const relatedIds = new Set<string>();
       related.forEach(r => {
         if (r.source === node.id) relatedIds.add(r.target);
@@ -105,16 +108,25 @@ export default function NodeDetails({ node, result, analysisId, onClose }: NodeD
       ).values());
       setRelatedClasses(dedupedRelated);
 
-      getFileContent(analysisId, info.filePath).then(res => {
-        if (res.success && res.content) {
-          const lines = res.content.split('\n');
-          const start = Math.max(0, info.startLine - 3);
-          const end = Math.min(lines.length, info.endLine + 2);
-          setCodeContent(lines.slice(start, end).join('\n'));
-        }
-      });
+      getFileContent(analysisId, info.filePath)
+        .then(res => {
+          if (cancelled) return;
+          if (res.success && res.content) {
+            const lines = res.content.split('\n');
+            const start = Math.max(0, info.startLine - 3);
+            const end = Math.min(lines.length, info.endLine + 2);
+            setCodeContent(lines.slice(start, end).join('\n'));
+          }
+        })
+        .catch(err => {
+          if (!cancelled) {
+            console.error('Failed to load file content:', err);
+          }
+        });
     }
-  }, [node, result]);
+
+    return () => { cancelled = true; };
+  }, [node, result, analysisId]);
 
   const uniqueImplements = classInfo ? Array.from(new Set(classInfo.implements)) : [];
   const uniqueProperties = classInfo

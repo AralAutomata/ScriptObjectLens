@@ -260,7 +260,7 @@ export default function DatabaseSchema({ models, relations }: DatabaseSchemaProp
       .style('cursor', 'pointer')
       .on('click', (event, d) => {
         event.stopPropagation();
-        setSelectedModel(selectedModel === d.id ? null : d.id);
+        setSelectedModel(prev => prev === d.id ? null : d.id);
       })
       .on('mouseenter', (event, d) => {
         setHoveredModel(d);

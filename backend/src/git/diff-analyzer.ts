@@ -71,7 +71,8 @@ export class DiffAnalyzer {
     const toWorktree = await git.createWorktree(toRef);
 
     if (!fromWorktree || !toWorktree) {
-      await git.removeWorktree(fromWorktree || "");
+      if (fromWorktree) await git.removeWorktree(fromWorktree);
+      if (toWorktree) await git.removeWorktree(toWorktree);
       return { success: false, error: "Failed to create temporary worktrees" };
     }
 
@@ -89,7 +90,7 @@ export class DiffAnalyzer {
         classes: beforeClasses,
         relationships: beforeRelationships,
         graph: beforeGraph,
-        totalFiles: (this.parser as any)["sourceFiles"]?.size || 0,
+        totalFiles: this.parser.getSourceFileCount(),
         totalClasses: beforeClasses.filter(c => c.type === "class" || c.type === "abstract").length,
         totalInterfaces: beforeClasses.filter(c => c.type === "interface").length,
         totalEnums: beforeClasses.filter(c => c.type === "enum").length,
@@ -111,7 +112,7 @@ export class DiffAnalyzer {
         classes: afterClasses,
         relationships: afterRelationships,
         graph: afterGraph,
-        totalFiles: (this.parser as any)["sourceFiles"]?.size || 0,
+        totalFiles: this.parser.getSourceFileCount(),
         totalClasses: afterClasses.filter(c => c.type === "class" || c.type === "abstract").length,
         totalInterfaces: afterClasses.filter(c => c.type === "interface").length,
         totalEnums: afterClasses.filter(c => c.type === "enum").length,

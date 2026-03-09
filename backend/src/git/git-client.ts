@@ -11,6 +11,15 @@ export class GitClient {
   }
 
   /**
+   * Validate a git ref to prevent flag injection
+   */
+  private validateRef(ref: string): void {
+    if (ref.startsWith('-')) {
+      throw new Error(`Invalid git ref: "${ref}"`)
+    }
+  }
+
+  /**
    * Check if the path is a valid git repository
    */
   async isValidRepository(): Promise<boolean> {
@@ -45,7 +54,7 @@ export class GitClient {
       // Get branch info with latest commit details
       const result = await this.runGitCommand([
         "for-each-ref",
-        "--format=%(refname:short)|%(objectname:short)|%(subject)|%(authorname)|%(authordate:iso)",
+        "--format=%(refname:short)%00%(objectname:short)%00%(subject)%00%(authorname)%00%(authordate:iso)",
         "refs/heads/"
       ]);
 
@@ -55,7 +64,7 @@ export class GitClient {
       const lines = result.stdout.split("\n").filter(line => line.trim());
 
       for (const line of lines) {
-        const parts = line.split("|");
+        const parts = line.split("\0");
         if (parts.length >= 2) {
           branches.push({
             name: parts[0],
@@ -80,7 +89,7 @@ export class GitClient {
       const result = await this.runGitCommand([
         "tag",
         "-l",
-        "--format=%(refname:short)|%(objectname:short)|%(subject)|%(creatordate:iso)"
+        "--format=%(refname:short)%00%(objectname:short)%00%(subject)%00%(creatordate:iso)"
       ]);
 
       if (!result.success) return [];
@@ -89,7 +98,7 @@ export class GitClient {
       const lines = result.stdout.split("\n").filter(line => line.trim());
 
       for (const line of lines) {
-        const parts = line.split("|");
+        const parts = line.split("\0");
         if (parts.length >= 2) {
           tags.push({
             name: parts[0],
@@ -114,7 +123,7 @@ export class GitClient {
       const result = await this.runGitCommand([
         "log",
         `--max-count=${limit}`,
-        "--format=%H|%h|%s|%an|%ad",
+        "--format=%H%x00%h%x00%s%x00%an%x00%ad",
         "--date=iso"
       ]);
 
@@ -124,7 +133,7 @@ export class GitClient {
       const lines = result.stdout.split("\n").filter(line => line.trim());
 
       for (const line of lines) {
-        const parts = line.split("|");
+        const parts = line.split("\0");
         if (parts.length >= 2) {
           commits.push({
             name: `${parts[2]?.substring(0, 50) || ""} (${parts[3] || "?"})`,
@@ -146,7 +155,8 @@ export class GitClient {
    */
   async resolveRef(ref: string): Promise<string | null> {
     try {
-      const result = await this.runGitCommand(["rev-parse", ref]);
+      this.validateRef(ref)
+      const result = await this.runGitCommand(["rev-parse", "--verify", ref]);
       if (result.success && result.stdout.trim()) {
         return result.stdout.trim();
       }
@@ -161,10 +171,13 @@ export class GitClient {
    */
   async getChangedFiles(from: string, to: string): Promise<GitFileDiff[]> {
     try {
+      this.validateRef(from)
+      this.validateRef(to)
       const result = await this.runGitCommand([
         "diff",
         "--name-status",
-        `${from}...${to}`
+        `${from}...${to}`,
+        "--"
       ]);
 
       if (!result.success) return [];
@@ -196,8 +209,8 @@ export class GitClient {
    */
   async createWorktree(ref: string): Promise<string | null> {
     try {
-      const timestamp = Date.now();
-      const worktreeName = `${TEMP_WORKTREE_PREFIX}${timestamp}`;
+      this.validateRef(ref)
+      const worktreeName = `${TEMP_WORKTREE_PREFIX}${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
       const worktreePath = `${this.repoPath}/${worktreeName}`;
 
       // Create worktree

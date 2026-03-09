@@ -341,8 +341,8 @@ export default function Graph({ nodes, edges, onNodeClick, selectedNodeId, simpl
       });
       
       link.style('opacity', l => {
-        const sourceId = l.source as string;
-        const targetId = l.target as string;
+        const sourceId = typeof l.source === 'string' ? l.source : (l.source as GraphNode).id;
+        const targetId = typeof l.target === 'string' ? l.target : (l.target as GraphNode).id;
         if (sourceId === d.id || targetId === d.id) return 0.9;
         return 0.08;
       });
@@ -403,17 +403,17 @@ export default function Graph({ nodes, edges, onNodeClick, selectedNodeId, simpl
     });
 
     // Initial centering
-    setTimeout(() => {
+    const centeringTimer = setTimeout(() => {
       const bounds = g.node()?.getBBox();
       if (bounds) {
         const fullWidth = bounds.width || width;
         const fullHeight = bounds.height || height;
         const midX = bounds.x + fullWidth / 2;
         const midY = bounds.y + fullHeight / 2;
-        
+
         const scale = 0.8 / Math.max(fullWidth / width, fullHeight / height);
         const translate = [width / 2 - scale * midX, height / 2 - scale * midY];
-        
+
         svg.transition()
           .duration(500)
           .call(
@@ -441,6 +441,7 @@ export default function Graph({ nodes, edges, onNodeClick, selectedNodeId, simpl
     }
 
     return () => {
+      clearTimeout(centeringTimer);
       simulation.stop();
     };
     }, [nodes, edges, onNodeClick, dimensions, simpleMode]);

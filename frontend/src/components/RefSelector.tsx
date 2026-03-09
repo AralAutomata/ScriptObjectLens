@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { GitRef } from '@/lib/api';
+import { GitRef, fetchGitRefs } from '@/lib/api';
 
 interface RefSelectorProps {
   path: string;
@@ -26,8 +26,7 @@ export default function RefSelector({ path, value, onChange, label, disabled }: 
   const loadRefs = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/git-refs?path=${encodeURIComponent(path)}`);
-      const data = await response.json();
+      const data = await fetchGitRefs(path);
       if (data.success) {
         setRefs({ branches: data.branches || [], tags: data.tags || [] });
       }

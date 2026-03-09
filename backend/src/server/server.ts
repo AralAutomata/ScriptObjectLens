@@ -23,7 +23,7 @@ const RATE_LIMIT = parseInt(Deno.env.get("RATE_LIMIT") || "100");
 const RATE_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_CLEANUP_INTERVAL = 300000;
 
-setInterval(() => {
+const rateLimitCleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [ip, record] of rateLimitMap) {
     if (now > record.resetTime) {
@@ -31,6 +31,19 @@ setInterval(() => {
     }
   }
 }, RATE_LIMIT_CLEANUP_INTERVAL);
+
+// Allow clean process exit
+if (typeof Deno !== 'undefined') {
+  Deno.unrefTimer(rateLimitCleanupTimer);
+}
+
+const RATE_LIMITED_PATHS = new Set([
+  "/api/analyze",
+  "/api/arch-diff",
+  "/api/filegraph",
+  "/api/routes",
+  "/api/schema",
+]);
 
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
@@ -81,16 +94,7 @@ const routes: Route[] = [
     path: "/api/analyze",
     handler: async (req: Request) => {
       try {
-        const ip = req.headers.get("x-forwarded-for") || req.headers.get("cf-connecting-ip") || "unknown";
         const corsHeaders = createCorsHeaders();
-        
-        if (!checkRateLimit(ip)) {
-          return new Response(JSON.stringify({ success: false, error: "Rate limit exceeded" }), {
-            headers: { "Content-Type": "application/json", ...corsHeaders },
-            status: 429
-          });
-        }
-        
         const body = await req.json();
         
         const validation = validateAnalyzeRequest(body);
@@ -125,15 +129,16 @@ const routes: Route[] = [
     path: "/api/result/:id",
     handler: async (req: Request) => {
       const corsHeaders = createCorsHeaders();
-      const id = req.url.split("/api/result/")[1];
-      
+      const url = new URL(req.url);
+      const id = url.pathname.split("/api/result/")[1]?.replace(/\/$/, '');
+
       if (!id || !UUID_REGEX.test(id)) {
         return new Response(JSON.stringify({ success: false, error: "Invalid ID format" }), {
           headers: { "Content-Type": "application/json", ...corsHeaders },
           status: 400
         });
       }
-      
+
       const result = getAnalysisResult(id);
       
       if (result) {
@@ -153,8 +158,9 @@ const routes: Route[] = [
     path: "/api/entity/:id",
     handler: async (req: Request) => {
       const corsHeaders = createCorsHeaders();
-      const id = req.url.split("/api/entity/")[1];
-      
+      const url = new URL(req.url);
+      const id = url.pathname.split("/api/entity/")[1]?.replace(/\/$/, '');
+
       if (!id || !UUID_REGEX.test(id)) {
         return new Response(JSON.stringify({ success: false, error: "Invalid ID format" }), {
           headers: { "Content-Type": "application/json", ...corsHeaders },
@@ -418,13 +424,24 @@ export function createCorsHeaders(): Record<string, string> {
 
 async function handleRequest(req: Request): Promise<Response> {
   const corsHeaders = createCorsHeaders();
-  
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   const url = new URL(req.url);
   const pathname = url.pathname;
+
+  // Apply rate limiting to expensive endpoints
+  if (RATE_LIMITED_PATHS.has(pathname)) {
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    if (!checkRateLimit(ip)) {
+      return new Response(JSON.stringify({ success: false, error: "Rate limit exceeded" }), {
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+        status: 429
+      });
+    }
+  }
 
   for (const route of routes) {
     if (req.method === route.method) {

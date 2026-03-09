@@ -21,7 +21,12 @@ function parseArgs(): CLIArgs {
       }
     } else if (arg === "--port" || arg === "-o") {
       if (i + 1 < args.length) {
-        port = parseInt(args[++i], 10);
+        const parsed = parseInt(args[++i], 10);
+        if (isNaN(parsed) || parsed < 1 || parsed > 65535) {
+          console.error(`Invalid port: "${args[i]}". Must be a number between 1 and 65535.`);
+          Deno.exit(1);
+        }
+        port = parsed;
       }
     } else if (arg === "--help" || arg === "-h") {
       printHelp();

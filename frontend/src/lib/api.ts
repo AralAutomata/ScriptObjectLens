@@ -1,5 +1,13 @@
 const API_BASE = '/api';
 
+async function handleResponse<T>(response: Response): Promise<T> {
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    throw new Error(`HTTP ${response.status}: ${text || response.statusText}`)
+  }
+  return response.json()
+}
+
 export interface AnalyzeRequest {
   path: string;
   exclude?: string[];
@@ -31,22 +39,22 @@ export async function analyzeProject(data: AnalyzeRequest): Promise<AnalyzeRespo
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   });
-  return response.json();
+  return handleResponse<AnalyzeResponse>(response);
 }
 
 export async function getAnalysisResult(id: string): Promise<AnalyzeResponse> {
   const response = await fetch(`${API_BASE}/result/${id}`);
-  return response.json();
+  return handleResponse<AnalyzeResponse>(response);
 }
 
 export async function getEntityDetails(id: string): Promise<any> {
   const response = await fetch(`${API_BASE}/entity/${id}`);
-  return response.json();
+  return handleResponse(response);
 }
 
 export async function getFileContent(analysisId: string, filePath: string): Promise<{ success: boolean; content?: string }> {
   const response = await fetch(`${API_BASE}/file?analysisId=${encodeURIComponent(analysisId)}&path=${encodeURIComponent(filePath)}`);
-  return response.json();
+  return handleResponse<{ success: boolean; content?: string }>(response);
 }
 
 // New API functions for additional tabs
@@ -84,7 +92,7 @@ export interface FileGraphResponse {
 
 export async function fetchFileGraph(path: string): Promise<FileGraphResponse> {
   const response = await fetch(`${API_BASE}/filegraph?path=${encodeURIComponent(path)}`);
-  return response.json();
+  return handleResponse<FileGraphResponse>(response);
 }
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS' | 'ALL';
@@ -108,7 +116,7 @@ export interface RouteTreeResponse {
 
 export async function fetchRouteTree(path: string): Promise<RouteTreeResponse> {
   const response = await fetch(`${API_BASE}/routes?path=${encodeURIComponent(path)}`);
-  return response.json();
+  return handleResponse<RouteTreeResponse>(response);
 }
 
 export interface SchemaField {
@@ -150,7 +158,7 @@ export interface DatabaseSchemaResponse {
 
 export async function fetchDatabaseSchema(path: string): Promise<DatabaseSchemaResponse> {
   const response = await fetch(`${API_BASE}/schema?path=${encodeURIComponent(path)}`);
-  return response.json();
+  return handleResponse<DatabaseSchemaResponse>(response);
 }
 
 // ============================================
@@ -246,10 +254,10 @@ export async function fetchArchitectureDiff(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ path, from, to }),
   });
-  return response.json();
+  return handleResponse<ArchitectureDiffResponse>(response);
 }
 
 export async function fetchGitRefs(path: string): Promise<GitRefsResponse> {
   const response = await fetch(`${API_BASE}/git-refs?path=${encodeURIComponent(path)}`);
-  return response.json();
+  return handleResponse<GitRefsResponse>(response);
 }

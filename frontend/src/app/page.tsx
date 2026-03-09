@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useCallback } from 'react';
-import { analyzeProject, AnalyzeResponse, fetchFileGraph, fetchRouteTree, fetchDatabaseSchema } from '@/lib/api';
+import { analyzeProject, AnalyzeResponse, fetchFileGraph, fetchRouteTree, fetchDatabaseSchema, FileGraphData, RouteNode, SchemaModel, SchemaRelation } from '@/lib/api';
 import Graph from '@/components/Graph';
 import NodeDetails from '@/components/NodeDetails';
 import SearchBar from '@/components/SearchBar';
@@ -19,18 +19,13 @@ type EdgeType = 'extends' | 'implements' | 'composition' | 'uses' | 'imports';
 type ViewMode = 'graph' | 'clusters';
 type ActiveTab = 'classes' | 'filegraph' | 'routes' | 'schema' | 'diff';
 
-interface FileGraphData {
-  nodes: any[];
-  edges: any[];
-}
-
 interface RouteTreeData {
-  routes: any[];
+  routes: RouteNode[];
 }
 
 interface DatabaseSchemaData {
-  models: any[];
-  relations: any[];
+  models: SchemaModel[];
+  relations: SchemaRelation[];
 }
 
 interface MethodInfo {

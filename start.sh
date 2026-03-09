@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 echo "╔═══════════════════════════════════════════════════════════════╗"
 echo "║      TypeScript Code Structure Visualizer - Starting          ║"
@@ -8,11 +9,24 @@ echo ""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# Kill any existing instances by process name
+BACKEND_PID=""
+FRONTEND_PID=""
+
+# Cleanup function - registered early to handle Ctrl+C during startup
+cleanup() {
+  echo ""
+  echo "Shutting down services..."
+  [ -n "$BACKEND_PID" ] && kill "$BACKEND_PID" 2>/dev/null || true
+  [ -n "$FRONTEND_PID" ] && kill "$FRONTEND_PID" 2>/dev/null || true
+  exit 0
+}
+
+trap cleanup SIGINT SIGTERM
+
+# Kill any existing instances by process name (scoped to this project)
 echo "Cleaning up existing processes..."
-pkill -9 -f "deno.*server" 2>/dev/null || true
-pkill -9 -f "next-server" 2>/dev/null || true
-pkill -9 -f "node.*next" 2>/dev/null || true
+pkill -9 -f "deno.*${SCRIPT_DIR}/backend/src/server/server.ts" 2>/dev/null || true
+pkill -9 -f "next dev.*${SCRIPT_DIR}/frontend" 2>/dev/null || true
 sleep 1
 
 # Kill processes by port (more reliable)
@@ -53,11 +67,12 @@ sleep 1
 
 echo "Installing frontend dependencies..."
 cd frontend
-npm install
+npm install || { echo "npm install failed"; exit 1; }
 
 echo ""
 echo "Starting API server (backend)..."
 cd ..
+set +e
 deno run --allow-read --allow-write --allow-net --allow-env --allow-run backend/src/server/server.ts &
 BACKEND_PID=$!
 
@@ -79,18 +94,5 @@ echo "║    - Frontend:    http://localhost:3001                       ║"
 echo "╚═══════════════════════════════════════════════════════════════╝"
 echo ""
 echo "Press Ctrl+C to stop all services"
-
-# Better cleanup on exit
-cleanup() {
-  echo ""
-  echo "Shutting down services..."
-  kill $BACKEND_PID 2>/dev/null || true
-  kill $FRONTEND_PID 2>/dev/null || true
-  pkill -9 -f "deno.*server.ts" 2>/dev/null || true
-  pkill -9 -f "next dev.*3001" 2>/dev/null || true
-  exit 0
-}
-
-trap cleanup SIGINT SIGTERM
 
 wait

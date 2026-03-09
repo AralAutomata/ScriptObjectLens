@@ -1,12 +1,16 @@
 import * as ts from "typescript";
 import { ClassInfo, MethodInfo, PropertyInfo, ParameterInfo, DecoratorInfo } from "../shared/types.ts";
 
+const BUILTIN_TYPE_NAMES = new Set([
+  "Promise", "Array", "Map", "Set", "WeakMap", "WeakSet", "Record", "Readonly", "Pick",
+  "ReturnType", "Parameters", "ConstructorParameters", "Omit", "Partial", "Required", "ReadonlyArray",
+  "String", "Number", "Boolean", "Object", "Date", "RegExp", "Error", "ErrorEvent", "Event"
+]);
+
 function fileExists(path: string): boolean {
   try {
+    if (isSymlink(path)) return false;
     const stat = Deno.statSync(path);
-    if (stat.isSymlink) {
-      return false;
-    }
     return stat.isFile;
   } catch {
     return false;
@@ -15,10 +19,7 @@ function fileExists(path: string): boolean {
 
 function readFile(path: string): string | undefined {
   try {
-    const stat = Deno.statSync(path);
-    if (stat.isSymlink) {
-      return undefined;
-    }
+    if (isSymlink(path)) return undefined;
     return Deno.readTextFileSync(path);
   } catch {
     return undefined;
@@ -116,7 +117,7 @@ export class TypeScriptParser {
     const normalizedIncludes = includes.map(p =>
       p.replace(/\\/g, '/').replace(/^\.\/+/, '').replace(/^\/+/, '')
     );
-    const normalizedExcludes = excludes.map(p => p.replace(/\\/g, '/'));
+    const normalizedExcludes = excludes.map(p => p.replace(/\\/g, '/').replace(/\/$/, ''));
 
     const globToRegExp = (glob: string): RegExp => {
       const hasGlobMeta = /[*?]/.test(glob);
@@ -150,11 +151,17 @@ export class TypeScriptParser {
       return { pattern, regex };
     });
 
+    const isPathExcluded = (path: string): boolean => {
+      return normalizedExcludes.some(exc => {
+        // Match as a path segment: /node_modules/ or /node_modules at end
+        return path.includes('/' + exc + '/') || path.endsWith('/' + exc);
+      });
+    };
+
     const shouldInclude = (path: string): boolean => {
       const normalizedPath = path.replace(/\\/g, '/');
       const isSourceExt = /\.(ts|tsx|js|jsx)$/.test(normalizedPath);
-      const isExcluded = normalizedExcludes.some(exc => normalizedPath.includes(exc));
-      if (!isSourceExt || isExcluded) {
+      if (!isSourceExt || isPathExcluded(normalizedPath)) {
         return false;
       }
 
@@ -176,7 +183,7 @@ export class TypeScriptParser {
           }
 
           if (entry.isDirectory) {
-            if (!normalizedExcludes.some(exc => normalizedFullPath.includes(exc))) {
+            if (!isPathExcluded(normalizedFullPath)) {
               await walkDir(fullPath);
             }
           } else if (entry.isFile && shouldInclude(fullPath)) {
@@ -690,17 +697,15 @@ export class TypeScriptParser {
   }
 
   private isBuiltInTypeName(name: string): boolean {
-    const builtins = new Set([
-      "Promise", "Array", "Map", "Set", "WeakMap", "WeakSet", "Record", "Readonly", "Pick",
-      "ReturnType", "Parameters", "ConstructorParameters", "Omit", "Partial", "Required", "ReadonlyArray",
-      "String", "Number", "Boolean", "Object", "Date", "RegExp", "Error", "ErrorEvent", "Event"
-    ]);
-
-    return builtins.has(name);
+    return BUILTIN_TYPE_NAMES.has(name);
   }
 
   private unique(items: string[]): string[] {
     return [...new Set(items.map(item => item.trim()).filter(Boolean))];
+  }
+
+  getSourceFileCount(): number {
+    return this.sourceFiles.size;
   }
 
   getSourceFileContent(filePath: string): string | null {
