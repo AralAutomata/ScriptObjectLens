@@ -2,13 +2,14 @@
 
 Local-first architecture explorer for TypeScript/JavaScript projects.
 
-It combines a Deno analysis backend with a Next.js + D3 frontend and now ships with five analysis tabs:
+It combines a Deno analysis backend with a Next.js + D3 frontend and now ships with six analysis tabs:
 
 1. **Classes**: OOP relationship graph + cluster/table view
 2. **File Graph**: hierarchical import-aware file tree
 3. **Route Tree**: discovered HTTP/page routes (Next.js + Express-style)
 4. **DB Schema**: Prisma/Drizzle model and relation map
 5. **Architecture Diff**: compare code structure between git references
+6. **Sandbox**: isolated Bun.js code execution environment (Podman container)
 
 ![Code Panel](./oopgraph05.png)
 
@@ -79,6 +80,59 @@ It combines a Deno analysis backend with a Next.js + D3 frontend and now ships w
 
 ![Git Graph View](./oopgraph10.png)
 
+### 6) Code Sandbox Tab
+
+A fully isolated JavaScript/TypeScript execution environment powered by Bun inside a Podman container. Write code in a Monaco Editor, execute it with a single click, and see real-time streaming output — all without any risk to the host system.
+
+**Editor features:**
+- Full Monaco Editor with TypeScript language support, syntax highlighting, and autocomplete
+- Dark theme (`vs-dark`) matched to the application's Mission Telemetry design
+- Zoom in/out controls (A-/A+) to adjust editor font size (8px–32px range)
+- Word wrap, auto-layout, and 2-space tab indentation
+
+**Execution controls:**
+- **Run**: Sends code to the backend, which spins up a new Podman container and streams output back via Server-Sent Events (SSE)
+- **Kill**: Terminates a running container mid-execution (useful for infinite loops or long-running code)
+- **Clear**: Clears the output panel
+- Live status indicator: green (idle), cyan pulse (running), red (error), amber (killed)
+
+**Output panel:**
+- Real-time streaming of stdout (white) and stderr (red) from the container
+- System messages (cyan, italic) for container lifecycle events (started, exited, killed)
+- Auto-scrolls to latest output
+- Capped at 10,000 lines to prevent memory issues
+
+![Bun Sandbox View](./oopgraph11.png)
+
+**Container isolation (security model):**
+
+Each execution creates a fresh, disposable Podman container with strict sandboxing:
+
+| Layer | Protection |
+|-------|-----------|
+| **Network** | `--network=none` — completely air-gapped, no internet access |
+| **Filesystem** | `--read-only` root filesystem; code mounted read-only |
+| **Memory** | `--memory=256m` hard cap |
+| **CPU** | `--cpus=1` single-core limit |
+| **Time** | `--timeout=30` — Podman kills the container after 30 seconds |
+| **Host access** | Zero — rootless Podman, no host bind mounts except the code file |
+| **Process** | Container destroyed (`--rm`) immediately after execution |
+| **Temp dirs** | `/tmp` and `/home/bun` mounted as `tmpfs` with `noexec,nosuid` |
+
+The container uses the `oven/bun:1-slim` image, built once and reused for all executions. The `start.sh` script automatically checks for and builds this image on first run.
+
+**Architecture:**
+
+```text
+Frontend (Next.js:3001)          Backend (Deno:8000)              Podman Container
+┌──────────────────┐   POST/SSE   ┌─────────────────┐   podman   ┌──────────────┐
+│ Monaco Editor    │────────────>│ /api/sandbox/   │──run────>│ oven/bun     │
+│ Output Terminal  │<──SSE stream─│ execute         │<──pipe───│ bun run code │
+│ Run/Kill/Clear   │   POST       │ /api/sandbox/   │  podman   │              │
+│                  │────────────>│ kill            │──kill───>│              │
+└──────────────────┘              └─────────────────┘           └──────────────┘
+```
+
 ---
 
 ## Architecture
@@ -95,8 +149,9 @@ Frontend (Next.js, port 3001)  <----HTTP---->  Backend (Deno, port 8000)
 
 ## Tech Stack
 
-- **Frontend**: Next.js 15, React 18, D3.js 7, Prism.js
+- **Frontend**: Next.js 15, React 18, D3.js 7, Prism.js, Monaco Editor
 - **Backend**: Deno 2, TypeScript Compiler API
+- **Sandbox**: Podman 5.x (rootless), Bun runtime (containerized)
 - **Language**: TypeScript (strict mode)
 
 ---
@@ -108,6 +163,7 @@ Frontend (Next.js, port 3001)  <----HTTP---->  Backend (Deno, port 8000)
 - Deno 2+
 - Node.js 18+
 - npm
+- Podman 5+ (required for Sandbox tab; rootless mode)
 
 ### Quick Start (recommended)
 
@@ -117,9 +173,10 @@ Frontend (Next.js, port 3001)  <----HTTP---->  Backend (Deno, port 8000)
 
 This script:
 
-1. Installs frontend dependencies
-2. Starts backend API on `http://localhost:8000`
-3. Starts frontend on `http://localhost:3001`
+1. Checks for Podman and builds the `sandbox-bun` container image if needed
+2. Installs frontend dependencies
+3. Starts backend API on `http://localhost:8000`
+4. Starts frontend on `http://localhost:3001`
 
 Press `Ctrl+C` to stop both.
 
@@ -152,6 +209,7 @@ npm run dev
    - `Route Tree`
    - `DB Schema`
    - `Architecture Diff`
+   - `Sandbox`
 
 ### Path recommendation
 
@@ -179,6 +237,8 @@ The **Architecture Diff** tab requires the project to be a valid Git repository.
 | `/api/schema?path=...` | GET | Parse DB schema |
 | `/api/arch-diff` | POST | Compare architecture between git refs |
 | `/api/git-refs?path=...` | GET | List branches and tags for a repository |
+| `/api/sandbox/execute` | POST | Execute code in sandboxed Podman container (SSE stream) |
+| `/api/sandbox/kill` | POST | Kill a running sandbox container |
 
 ### `POST /api/analyze` body
 
@@ -205,6 +265,33 @@ The **Architecture Diff** tab requires the project to be a valid Git repository.
 - `relationships.added/removed`: New and broken dependencies
 - `summary`: Statistics about total changes
 - `beforeSnapshot`/`afterSnapshot`: Full analysis data for visualization
+
+### `POST /api/sandbox/execute` body
+
+```json
+{
+  "code": "console.log('Hello from Bun!');",
+  "timeout": 30
+}
+```
+
+**Response**: Server-Sent Events stream with `Content-Type: text/event-stream`. The `X-Session-Id` header contains the session ID for kill requests.
+
+Each SSE event is a JSON object:
+
+```
+data: {"type":"stdout","data":"Hello from Bun!","timestamp":1234567890}
+data: {"type":"stderr","data":"error message","timestamp":1234567890}
+data: {"type":"exit","data":"0","timestamp":1234567890}
+```
+
+### `POST /api/sandbox/kill` body
+
+```json
+{
+  "sessionId": "uuid-of-running-session"
+}
+```
 
 ---
 
@@ -270,9 +357,13 @@ npm run start
 │       │   ├── DiffSummary.tsx       # Change statistics (NEW)
 │       │   ├── SideBySideGraph.tsx   # Dual graph view (NEW)
 │       │   ├── ChangeList.tsx        # Change list (NEW)
-│       │   └── ArchitectureDiff.tsx  # Main diff component (NEW)
+│       │   ├── ArchitectureDiff.tsx  # Main diff component (NEW)
+│       │   ├── SandboxTab.tsx       # Code sandbox editor + output (NEW)
+│       │   └── SandboxTab.css       # Sandbox styling (NEW)
 │       └── lib/
 │           └── api.ts
+├── sandbox/
+│   └── Containerfile               # Bun container image definition (NEW)
 ├── shared/
 │   └── types.ts
 ├── deno.json
@@ -288,7 +379,9 @@ npm run start
 - Path validation rejects traversal/system-protected prefixes.
 - Backend uses explicit CORS/security headers.
 - Backend requires Deno permissions: `--allow-read --allow-write --allow-net --allow-env --allow-run`.
-- The `--allow-run` permission is required for Git operations (Architecture Diff feature).
+- The `--allow-run` permission is required for Git operations (Architecture Diff) and Podman execution (Sandbox).
+- Sandbox containers are fully isolated: no network, read-only root, memory/CPU/time limits, rootless Podman.
+- Code files are written to host `/tmp` with `644` permissions, mounted read-only into the container, and deleted after execution.
 - This tool is intended for local analysis, not remote repository scanning.
 
 ---
@@ -323,6 +416,13 @@ npm run start
 - Ensure the project path is a valid Git repository (has `.git` directory).
 - Check that Git is installed and accessible from the command line.
 - The backend requires `--allow-run` permission to execute Git commands.
+
+### Sandbox shows "Failed to start container"
+
+- Ensure Podman is installed: `podman --version` (requires 5.x+).
+- Ensure the sandbox image exists: `podman image exists sandbox-bun`. If not, build it: `podman build -t sandbox-bun ./sandbox`.
+- Check that rootless Podman works: `podman run --rm docker.io/oven/bun:1-slim bun --version`.
+- If you see permission errors, ensure your user has rootless Podman configured (`/etc/subuid` and `/etc/subgid`).
 
 ### Backend not reachable
 

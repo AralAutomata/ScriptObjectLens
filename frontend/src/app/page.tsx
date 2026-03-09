@@ -10,6 +10,7 @@ import FileGraph from '@/components/FileGraph';
 import RouteTree from '@/components/RouteTree';
 import DatabaseSchema from '@/components/DatabaseSchema';
 import ArchitectureDiffView from '@/components/ArchitectureDiff';
+import SandboxTab from '@/components/SandboxTab';
 import './page.css';
 
 type NodeType = 'class' | 'interface' | 'abstract' | 'enum' | 'typeAlias' | 'function';
@@ -17,7 +18,7 @@ type RelationFilter = 'all' | 'inheritance' | 'dependency' | 'imports';
 type DegreeFilter = 'all' | 'high' | 'cycle';
 type EdgeType = 'extends' | 'implements' | 'composition' | 'uses' | 'imports';
 type ViewMode = 'graph' | 'clusters';
-type ActiveTab = 'classes' | 'filegraph' | 'routes' | 'schema' | 'diff';
+type ActiveTab = 'classes' | 'filegraph' | 'routes' | 'schema' | 'diff' | 'sandbox';
 
 interface RouteTreeData {
   routes: RouteNode[];
@@ -136,6 +137,7 @@ export default function Home() {
     routes: false,
     schema: false,
     diff: false,
+    sandbox: false,
   });
 
   const isHighDegree = (node: GraphNode): boolean => ((node.inDegree || 0) + (node.outDegree || 0)) >= 3;
@@ -562,6 +564,12 @@ export default function Home() {
                 >
                   Architecture Diff
                 </button>
+                <button
+                  className={`tab-button ${activeTab === 'sandbox' ? 'active' : ''}`}
+                  onClick={() => handleTabChange('sandbox')}
+                >
+                  Sandbox
+                </button>
               </div>
 
               <div className="tab-content-wrapper">
@@ -704,6 +712,10 @@ export default function Home() {
 
                 {activeTab === 'diff' && (
                   <ArchitectureDiffView path={scanPath} />
+                )}
+
+                {activeTab === 'sandbox' && (
+                  <SandboxTab projectPath={scanPath} />
                 )}
               </div>
             </div>

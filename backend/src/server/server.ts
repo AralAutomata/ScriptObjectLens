@@ -7,7 +7,9 @@ import {
   getRouteTree,
   getDatabaseSchema,
   analyzeArchitectureDiff,
-  getGitRefs
+  getGitRefs,
+  executeSandbox,
+  killSandbox
 } from "./handlers.ts";
 
 interface Route {
@@ -43,6 +45,7 @@ const RATE_LIMITED_PATHS = new Set([
   "/api/filegraph",
   "/api/routes",
   "/api/schema",
+  "/api/sandbox/execute",
 ]);
 
 function checkRateLimit(ip: string): boolean {
@@ -405,6 +408,65 @@ const routes: Route[] = [
         status: result.success ? 200 : 400
       });
     }
+  },
+  {
+    method: "POST",
+    path: "/api/sandbox/execute",
+    handler: async (req: Request) => {
+      const corsHeaders = createCorsHeaders();
+      try {
+        const { stream, sessionId } = await executeSandbox(req);
+        return new Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Session-Id": sessionId,
+            "X-Accel-Buffering": "no",
+            ...corsHeaders
+          }
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: e instanceof Error ? e.message : "Sandbox execution failed"
+        }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 400
+        });
+      }
+    }
+  },
+  {
+    method: "POST",
+    path: "/api/sandbox/kill",
+    handler: async (req: Request) => {
+      const corsHeaders = createCorsHeaders();
+      try {
+        const body = await req.json();
+        const sessionId = body?.sessionId;
+
+        if (!sessionId || typeof sessionId !== "string") {
+          return new Response(JSON.stringify({ success: false, error: "sessionId is required" }), {
+            headers: { "Content-Type": "application/json", ...corsHeaders },
+            status: 400
+          });
+        }
+
+        const result = await killSandbox(sessionId);
+        return new Response(JSON.stringify(result), {
+          headers: { "Content-Type": "application/json", ...corsHeaders }
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: e instanceof Error ? e.message : "Kill failed"
+        }), {
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+          status: 500
+        });
+      }
+    }
   }
 ];
 
@@ -415,6 +477,7 @@ export function createCorsHeaders(): Record<string, string> {
     "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Expose-Headers": "X-Session-Id",
     "X-Content-Type-Options": "nosniff",
     "X-Frame-Options": "DENY",
     "X-XSS-Protection": "1; mode=block",

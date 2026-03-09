@@ -261,3 +261,95 @@ export async function fetchGitRefs(path: string): Promise<GitRefsResponse> {
   const response = await fetch(`${API_BASE}/git-refs?path=${encodeURIComponent(path)}`);
   return handleResponse<GitRefsResponse>(response);
 }
+
+// ============================================
+// Sandbox API
+// ============================================
+
+export interface SandboxRequest {
+  code: string;
+  timeout?: number;
+}
+
+export interface SandboxEvent {
+  type: 'stdout' | 'stderr' | 'exit';
+  data: string;
+  timestamp: number;
+}
+
+export async function executeSandboxCode(
+  request: SandboxRequest,
+  onEvent: (event: SandboxEvent) => void,
+  signal?: AbortSignal
+): Promise<string> {
+  const response = await fetch(`${API_BASE}/sandbox/execute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+    signal,
+  });
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(`HTTP ${response.status}: ${text || response.statusText}`);
+  }
+
+  const sessionId = response.headers.get('X-Session-Id') || '';
+  const reader = response.body?.getReader();
+
+  if (!reader) {
+    throw new Error('No response body');
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  (async () => {
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const event: SandboxEvent = JSON.parse(line.slice(6));
+              onEvent(event);
+            } catch {
+              // skip malformed SSE lines
+            }
+          }
+        }
+      }
+
+      // Process remaining buffer
+      if (buffer.startsWith('data: ')) {
+        try {
+          const event: SandboxEvent = JSON.parse(buffer.slice(6));
+          onEvent(event);
+        } catch {
+          // skip
+        }
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        onEvent({ type: 'exit', data: '1', timestamp: Date.now() });
+      }
+    }
+  })();
+
+  return sessionId;
+}
+
+export async function killSandboxProcess(sessionId: string): Promise<{ success: boolean }> {
+  const response = await fetch(`${API_BASE}/sandbox/kill`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId }),
+  });
+  return handleResponse<{ success: boolean }>(response);
+}

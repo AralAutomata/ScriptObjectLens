@@ -65,6 +65,18 @@ fi
 
 sleep 1
 
+# Check Podman + sandbox image
+if ! command -v podman &>/dev/null; then
+  echo "WARNING: Podman not found. Sandbox tab will not work."
+else
+  if ! podman image exists sandbox-bun 2>/dev/null; then
+    echo "Building sandbox container image..."
+    podman build -t sandbox-bun ./sandbox || echo "WARNING: Failed to build sandbox image. Sandbox tab may not work."
+  else
+    echo "Sandbox image already exists."
+  fi
+fi
+
 echo "Installing frontend dependencies..."
 cd frontend
 npm install || { echo "npm install failed"; exit 1; }
