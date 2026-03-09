@@ -20,6 +20,18 @@
   --edge-extends: #64748b;
   --edge-implements: #94a3b8;
   --edge-composition: #475569;
+
+  /* Mission Telemetry tokens */
+  --font-display: var(--font-display, 'Space Grotesk', system-ui, sans-serif);
+  --font-mono: var(--font-mono, 'JetBrains Mono', 'SF Mono', monospace);
+  --diff-cyan: #22d3ee;
+  --diff-amber: #fbbf24;
+  --diff-red: #f87171;
+  --diff-green: #4ade80;
+  --diff-surface: rgba(15, 23, 42, 0.6);
+  --diff-surface-elevated: rgba(30, 41, 59, 0.8);
+  --diff-border-subtle: rgba(71, 85, 105, 0.25);
+  --diff-glow-blue: rgba(59, 130, 246, 0.3);
 }
 
 body {

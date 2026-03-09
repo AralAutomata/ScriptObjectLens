@@ -1,7 +1,10 @@
+/* ═══════════════════════════════════════════════════════════
+   Side-by-Side Graph Panels — Mission Telemetry
+   ═══════════════════════════════════════════════════════════ */
 .side-by-side-graph {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   padding: 16px;
   height: 100%;
   overflow: auto;
@@ -10,6 +13,16 @@
 @media (min-width: 900px) {
   .side-by-side-graph {
     flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .side-by-side-graph .graph-panel {
+    flex: 1 1 calc(50% - 6px);
+    min-width: 0;
+  }
+
+  .side-by-side-graph .graph-legend {
+    flex: 0 0 100%;
   }
 }
 
@@ -17,50 +30,65 @@
   flex: 1;
   min-width: 0;
   background: var(--bg-secondary);
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  border: 1px solid var(--diff-border-subtle);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.graph-panel:hover {
+  border-color: rgba(34, 211, 238, 0.2);
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.05);
 }
 
 .graph-panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border-color);
+  padding: 10px 16px;
+  background: rgba(51, 65, 85, 0.4);
+  border-bottom: 1px solid var(--diff-border-subtle);
 }
 
 .graph-panel-title {
-  font-size: 13px;
+  font-family: var(--font-display);
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-primary);
+  letter-spacing: 0.1px;
 }
 
 .graph-panel-hash {
   font-size: 11px;
-  font-family: 'Monaco', 'Menlo', monospace;
-  color: var(--text-secondary);
-  background: var(--bg-secondary);
-  padding: 2px 6px;
-  border-radius: 4px;
+  font-family: var(--font-mono);
+  color: var(--diff-cyan);
+  background: rgba(34, 211, 238, 0.08);
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 1px solid rgba(34, 211, 238, 0.15);
 }
 
 .graph-svg {
   flex: 1;
-  min-height: 400px;
-  background: #0f172a;
+  min-height: 420px;
+  background:
+    radial-gradient(ellipse at center, #131d36 0%, #0f172a 100%);
+  background-image:
+    radial-gradient(ellipse at center, #131d36 0%, #0f172a 100%),
+    radial-gradient(circle 1px at center, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+  background-size: 100% 100%, 20px 20px;
 }
 
+/* Legend bar */
 .graph-legend {
   display: flex;
-  gap: 16px;
-  padding: 12px 16px;
-  background: var(--bg-secondary);
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
+  gap: 20px;
+  padding: 10px 16px;
+  background: var(--diff-surface);
+  border-radius: 4px;
+  border: 1px solid var(--diff-border-subtle);
   flex-wrap: wrap;
   justify-content: center;
 }
@@ -69,28 +97,44 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
-  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 
 .graph-legend-color {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
+  box-shadow: 0 0 6px currentColor;
 }
 
 .graph-legend-color.added {
   background: #22c55e;
+  color: #22c55e;
 }
 
 .graph-legend-color.removed {
   background: #ef4444;
+  color: #ef4444;
 }
 
 .graph-legend-color.modified {
   background: #f59e0b;
+  color: #f59e0b;
 }
 
 .graph-legend-color.unchanged {
   background: #64748b;
+  color: #64748b;
+}
+
+/* Dash animation for removed edges */
+@keyframes dashMove {
+  to {
+    stroke-dashoffset: -16;
+  }
 }

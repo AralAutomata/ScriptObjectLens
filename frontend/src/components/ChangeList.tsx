@@ -153,7 +153,7 @@ function ChangeSection({
           >
             <span
               className="change-list-item-bullet"
-              style={{ background: color }}
+              style={{ background: color, color }}
             />
             <span className="change-list-item-content">
               <span className="change-list-item-name">{change.name}</span>

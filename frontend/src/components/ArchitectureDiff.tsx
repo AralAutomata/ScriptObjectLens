@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import type { ArchitectureDiff } from '@/lib/api';
 import { fetchArchitectureDiff } from '@/lib/api';
 import RefSelector from './RefSelector';
@@ -54,6 +54,16 @@ export default function ArchitectureDiffView({ path }: ArchitectureDiffProps) {
     }
   }, [path, fromRef, toRef]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' && !diff && fromRef && toRef && !loading) {
+        handleCompare();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [diff, fromRef, toRef, loading, handleCompare]);
+
   const handleEntityClick = useCallback((entity: any) => {
     setSelectedEntity(entity);
   }, []);
@@ -66,50 +76,62 @@ export default function ArchitectureDiffView({ path }: ArchitectureDiffProps) {
     <div className="architecture-diff">
       {!diff ? (
         <div className="diff-setup">
-          <div className="diff-setup-header">
+          <div className="diff-setup-hero">
+            <svg className="diff-setup-hero-decoration" width="200" height="60" viewBox="0 0 200 60">
+              <circle cx="40" cy="30" r="25" fill="none" stroke="currentColor" strokeWidth="0.5" />
+              <circle cx="100" cy="30" r="18" fill="none" stroke="currentColor" strokeWidth="0.5" />
+              <circle cx="160" cy="30" r="22" fill="none" stroke="currentColor" strokeWidth="0.5" />
+              <line x1="65" y1="30" x2="82" y2="30" stroke="currentColor" strokeWidth="0.5" />
+              <line x1="118" y1="30" x2="138" y2="30" stroke="currentColor" strokeWidth="0.5" />
+            </svg>
             <h2>Architecture Diff</h2>
             <p>Compare code structure between two git references</p>
           </div>
 
-          <div className="diff-inputs">
-            <RefSelector
-              path={path}
-              value={fromRef}
-              onChange={setFromRef}
-              label="From (Base)"
-              disabled={loading}
-            />
+          <div className="diff-compare-card">
+            <div className="diff-inputs">
+              <RefSelector
+                path={path}
+                value={fromRef}
+                onChange={setFromRef}
+                label="From (Base)"
+                disabled={loading}
+              />
 
-            <div className="diff-arrow">↓</div>
+              <div className="diff-arrow">&rarr;</div>
 
-            <RefSelector
-              path={path}
-              value={toRef}
-              onChange={setToRef}
-              label="To (Compare)"
-              disabled={loading}
-            />
+              <RefSelector
+                path={path}
+                value={toRef}
+                onChange={setToRef}
+                label="To (Compare)"
+                disabled={loading}
+              />
+            </div>
+
+            {error && <div className="diff-error">{error}</div>}
+
+            <button
+              className="diff-compare-btn"
+              onClick={handleCompare}
+              disabled={loading || !fromRef || !toRef}
+            >
+              {loading ? (
+                <>
+                  <span className="diff-compare-btn-spinner" />
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  Compare Architecture
+                  <kbd>Enter</kbd>
+                </>
+              )}
+            </button>
           </div>
 
-          {error && <div className="diff-error">{error}</div>}
-
-          <button
-            className="diff-compare-btn"
-            onClick={handleCompare}
-            disabled={loading || !fromRef || !toRef}
-          >
-            {loading ? (
-              <>
-                <span className="diff-compare-btn-spinner" />
-                Analyzing...
-              </>
-            ) : (
-              'Compare Architecture'
-            )}
-          </button>
-
           <div className="diff-examples">
-            <p className="diff-examples-title">Examples:</p>
+            <p className="diff-examples-title">Quick picks</p>
             <div className="diff-examples-suggestions">
               <button onClick={() => { setFromRef('main'); setToRef('develop'); }}>
                 main → develop
@@ -173,37 +195,83 @@ export default function ArchitectureDiffView({ path }: ArchitectureDiffProps) {
           </div>
 
           {selectedEntity && (
-            <div className="diff-entity-panel">
-              <div className="diff-entity-panel-header">
-                <h3>{selectedEntity.name || selectedEntity.label}</h3>
-                <button onClick={() => setSelectedEntity(null)}>✕</button>
-              </div>
-              <div className="diff-entity-panel-content">
-                <p><strong>Type:</strong> {selectedEntity.type}</p>
-                <p><strong>Status:</strong> {selectedEntity.status || 'N/A'}</p>
-                {selectedEntity.filePath && (
-                  <p><strong>File:</strong> <code>{selectedEntity.filePath}</code></p>
-                )}
-                {selectedEntity.changes && (
-                  <div className="diff-entity-changes">
-                    <h4>Changes:</h4>
-                    {selectedEntity.changes.methodsAdded && (
-                      <p>+ {selectedEntity.changes.methodsAdded.length} methods</p>
+            <>
+              <div className="diff-entity-backdrop" onClick={() => setSelectedEntity(null)} />
+              <div className="diff-entity-drawer">
+                <div className="diff-entity-drawer-header">
+                  <div className="diff-entity-drawer-title">
+                    {selectedEntity.status && (
+                      <div
+                        className="diff-entity-status-badge"
+                        data-status={selectedEntity.status}
+                      >
+                        {selectedEntity.status}
+                      </div>
                     )}
-                    {selectedEntity.changes.methodsRemoved && (
-                      <p>- {selectedEntity.changes.methodsRemoved.length} methods</p>
-                    )}
-                    {selectedEntity.changes.propertiesAdded && (
-                      <p>+ {selectedEntity.changes.propertiesAdded.length} properties</p>
-                    )}
-                    {selectedEntity.changes.propertiesRemoved && (
-                      <p>- {selectedEntity.changes.propertiesRemoved.length} properties</p>
-                    )}
+                    <h3>{selectedEntity.name || selectedEntity.label}</h3>
                   </div>
-                )}
+                  <button
+                    className="diff-entity-close-btn"
+                    onClick={() => setSelectedEntity(null)}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <line x1="2" y1="2" x2="12" y2="12" />
+                      <line x1="12" y1="2" x2="2" y2="12" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="diff-entity-drawer-content">
+                  <div className="diff-entity-prop">
+                    <span className="diff-entity-prop-key">Type</span>
+                    <span className="diff-entity-prop-value">{selectedEntity.type}</span>
+                  </div>
+                  <div className="diff-entity-prop">
+                    <span className="diff-entity-prop-key">Status</span>
+                    <span className="diff-entity-prop-value">{selectedEntity.status || 'N/A'}</span>
+                  </div>
+                  {selectedEntity.filePath && (
+                    <div className="diff-entity-prop">
+                      <span className="diff-entity-prop-key">File</span>
+                      <span className="diff-entity-prop-value">
+                        <code>{selectedEntity.filePath}</code>
+                      </span>
+                    </div>
+                  )}
+                  {selectedEntity.changes && (
+                    <div className="diff-entity-changes">
+                      <h4>Changes</h4>
+                      {selectedEntity.changes.methodsAdded && (
+                        <p>+ {selectedEntity.changes.methodsAdded.length} methods</p>
+                      )}
+                      {selectedEntity.changes.methodsRemoved && (
+                        <p>- {selectedEntity.changes.methodsRemoved.length} methods</p>
+                      )}
+                      {selectedEntity.changes.propertiesAdded && (
+                        <p>+ {selectedEntity.changes.propertiesAdded.length} properties</p>
+                      )}
+                      {selectedEntity.changes.propertiesRemoved && (
+                        <p>- {selectedEntity.changes.propertiesRemoved.length} properties</p>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            </>
           )}
+        </div>
+      )}
+
+      {loading && !diff && (
+        <div className="diff-loading-overlay">
+          <div className="diff-loading-ring">
+            <div className="diff-loading-ring-inner" />
+          </div>
+          <div className="diff-loading-text">Analyzing architecture...</div>
+          <div className="diff-loading-refs">
+            <span>{fromRef}</span>
+            <span className="diff-loading-arrow">→</span>
+            <span>{toRef}</span>
+          </div>
         </div>
       )}
     </div>

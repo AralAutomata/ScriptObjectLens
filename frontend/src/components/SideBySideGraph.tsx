@@ -46,7 +46,6 @@ export default function SideBySideGraph({ diff, onNodeClick }: SideBySideGraphPr
   const beforeSvgRef = useRef<SVGSVGElement>(null);
   const afterSvgRef = useRef<SVGSVGElement>(null);
   const [dimensions, setDimensions] = useState({ width: 400, height: 500 });
-  const [zoomTransform, setZoomTransform] = useState<d3.ZoomTransform | null>(null);
 
   useEffect(() => {
     const updateDimensions = () => {
@@ -94,12 +93,11 @@ export default function SideBySideGraph({ diff, onNodeClick }: SideBySideGraphPr
     const beforeEdges = diff.beforeSnapshot.graph.edges.map((e: any) => {
       const sourceId = typeof e.source === 'string' ? e.source : e.source.id;
       const targetId = typeof e.target === 'string' ? e.target : e.target.id;
-      
-      // Check if this relationship was removed
+
       const wasRemoved = diff.relationships.removed.some(
         r => r.source === sourceId && r.target === targetId && r.type === e.type
       );
-      
+
       return {
         source: sourceId,
         target: targetId,
@@ -111,12 +109,11 @@ export default function SideBySideGraph({ diff, onNodeClick }: SideBySideGraphPr
     const afterEdges = diff.afterSnapshot.graph.edges.map((e: any) => {
       const sourceId = typeof e.source === 'string' ? e.source : e.source.id;
       const targetId = typeof e.target === 'string' ? e.target : e.target.id;
-      
-      // Check if this relationship was added
+
       const wasAdded = diff.relationships.added.some(
         r => r.source === sourceId && r.target === targetId && r.type === e.type
       );
-      
+
       return {
         source: sourceId,
         target: targetId,
@@ -211,6 +208,41 @@ function renderGraph(
       .attr('fill', '#64748b');
   });
 
+  // SVG glow filters for status-colored nodes
+  const glowColors: Record<string, string> = {
+    added: '#22c55e',
+    removed: '#ef4444',
+    modified: '#f59e0b',
+  };
+
+  Object.entries(glowColors).forEach(([status, color]) => {
+    const filter = defs.append('filter')
+      .attr('id', `glow-${side}-${status}`)
+      .attr('x', '-50%')
+      .attr('y', '-50%')
+      .attr('width', '200%')
+      .attr('height', '200%');
+
+    filter.append('feGaussianBlur')
+      .attr('stdDeviation', '4')
+      .attr('result', 'blur');
+
+    filter.append('feFlood')
+      .attr('flood-color', color)
+      .attr('flood-opacity', '0.4')
+      .attr('result', 'color');
+
+    filter.append('feComposite')
+      .attr('in', 'color')
+      .attr('in2', 'blur')
+      .attr('operator', 'in')
+      .attr('result', 'shadow');
+
+    const merge = filter.append('feMerge');
+    merge.append('feMergeNode').attr('in', 'shadow');
+    merge.append('feMergeNode').attr('in', 'SourceGraphic');
+  });
+
   const g = svg.append('g');
 
   // Zoom
@@ -245,6 +277,10 @@ function renderGraph(
     .attr('stroke-dasharray', d => d.status === 'removed' ? '4,4' : '')
     .attr('marker-end', d => `url(#arrowhead-${side}-${d.type})`);
 
+  // Animate dashes on removed edges
+  link.filter(d => d.status === 'removed')
+    .style('animation', 'dashMove 1s linear infinite');
+
   // Nodes
   const node = g.append('g')
     .attr('class', 'nodes')
@@ -257,7 +293,7 @@ function renderGraph(
       onNodeClick?.(d, side);
     });
 
-  // Node circle with status color
+  // Node circle with status color + glow filter
   node.append('circle')
     .attr('r', 18)
     .attr('fill', d => {
@@ -272,7 +308,13 @@ function renderGraph(
       if (d.status === 'modified') return '#92400e';
       return NODE_COLORS[d.type] || '#475569';
     })
-    .attr('stroke-width', 2);
+    .attr('stroke-width', 2)
+    .attr('filter', d => {
+      if (d.status && d.status !== 'unchanged') {
+        return `url(#glow-${side}-${d.status})`;
+      }
+      return null;
+    });
 
   // Type indicator letter
   node.append('text')
@@ -281,7 +323,8 @@ function renderGraph(
     .attr('dominant-baseline', 'central')
     .attr('fill', '#fff')
     .attr('font-size', '12px')
-    .attr('font-weight', 'bold');
+    .attr('font-weight', 'bold')
+    .attr('font-family', 'var(--font-mono), JetBrains Mono, monospace');
 
   // Label
   node.append('text')
@@ -290,7 +333,7 @@ function renderGraph(
     .attr('y', 4)
     .attr('fill', d => d.status === 'removed' ? '#991b1b' : '#f1f5f9')
     .attr('font-size', '11px')
-    .attr('font-family', 'system-ui, sans-serif');
+    .attr('font-family', 'var(--font-mono), JetBrains Mono, monospace');
 
   simulation.on('tick', () => {
     link

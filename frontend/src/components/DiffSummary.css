@@ -1,154 +1,355 @@
+/* ═══════════════════════════════════════════════════════════
+   Dashboard Summary Bar — Mission Telemetry
+   ═══════════════════════════════════════════════════════════ */
 .diff-summary {
-  padding: 16px;
+  padding: 20px;
   background: var(--bg-secondary);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--diff-border-subtle);
 }
 
+/* Stat cards grid */
 .diff-summary-stats {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
   margin-bottom: 16px;
 }
 
 .diff-stat-card {
-  padding: 12px;
-  background: var(--bg-tertiary);
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
+  padding: 14px 16px;
+  background: var(--diff-surface);
+  border-radius: 4px;
+  border: 1px solid var(--diff-border-subtle);
+  position: relative;
+  overflow: hidden;
+  animation: cardReveal 0.4s ease-out both;
+}
+
+@keyframes cardReveal {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.diff-stat-card:hover {
+  border-color: rgba(148, 163, 184, 0.3);
 }
 
 .diff-stat-card-header {
   display: flex;
   align-items: baseline;
   gap: 6px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .diff-stat-card-icon {
   font-size: 14px;
   font-weight: 700;
-  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  opacity: 0.6;
 }
 
 .diff-stat-card-value {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 28px;
+  font-weight: 800;
+  font-family: var(--font-display);
   line-height: 1;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
 }
 
 .diff-stat-card-label {
-  font-size: 11px;
+  font-family: var(--font-display);
+  font-size: 10px;
   color: var(--text-secondary);
-  font-weight: 500;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
+  line-height: 1.4;
 }
 
 .diff-stat-card-sublabel {
   display: block;
   font-size: 10px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   text-transform: none;
   letter-spacing: 0;
   margin-top: 2px;
+  opacity: 0.7;
 }
 
+/* Bottom accent bar with fill animation */
+.diff-stat-card-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--card-accent, var(--diff-border-subtle));
+  animation: barFill 0.8s ease-out 0.3s both;
+}
+
+@keyframes barFill {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Filter toggles
+   ═══════════════════════════════════════════════════════════ */
 .diff-summary-filters {
   display: flex;
   align-items: center;
   gap: 16px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-color);
+  padding: 12px 0;
+  border-top: 1px solid var(--diff-border-subtle);
   flex-wrap: wrap;
 }
 
 .diff-summary-filters-label {
-  font-size: 12px;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
 }
 
 .diff-summary-filter {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 13px;
+  font-size: 12px;
+  font-family: var(--font-display);
   color: var(--text-primary);
   cursor: pointer;
   user-select: none;
+  padding: 4px 10px 4px 4px;
+  border-radius: 4px;
+  transition: background 0.15s;
 }
 
+.diff-summary-filter:hover {
+  background: rgba(51, 65, 85, 0.4);
+}
+
+/* Custom checkbox */
 .diff-summary-filter input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.diff-summary-filter-check {
   width: 16px;
   height: 16px;
-  accent-color: var(--accent-color);
-  cursor: pointer;
+  border: 2px solid var(--diff-border-subtle);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.diff-summary-filter-check::after {
+  content: '';
+  width: 8px;
+  height: 5px;
+  border-left: 2px solid #0f172a;
+  border-bottom: 2px solid #0f172a;
+  transform: rotate(-45deg) scale(0);
+  transition: transform 0.15s;
+  position: absolute;
+  top: 3px;
+}
+
+.diff-summary-filter input[type="checkbox"]:checked + .diff-summary-filter-check {
+  background: var(--diff-cyan);
+  border-color: var(--diff-cyan);
+}
+
+.diff-summary-filter input[type="checkbox"]:checked + .diff-summary-filter-check::after {
+  transform: rotate(-45deg) scale(1);
 }
 
 .diff-summary-filter-indicator {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   display: inline-block;
+  box-shadow: 0 0 6px currentColor;
 }
 
 .diff-summary-filter-indicator.added {
   background: #22c55e;
+  color: #22c55e;
 }
 
 .diff-summary-filter-indicator.removed {
   background: #ef4444;
+  color: #ef4444;
 }
 
 .diff-summary-filter-indicator.modified {
   background: #f59e0b;
+  color: #f59e0b;
 }
 
+/* ═══════════════════════════════════════════════════════════
+   Impact Analysis
+   ═══════════════════════════════════════════════════════════ */
 .diff-summary-impact {
-  margin-top: 16px;
+  margin-top: 4px;
   padding-top: 16px;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--diff-border-subtle);
 }
 
 .diff-summary-impact-title {
-  font-size: 11px;
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
   color: var(--text-secondary);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
   margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.diff-summary-impact-title::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--diff-cyan);
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.4);
 }
 
 .diff-summary-impact-stats {
-  display: flex;
-  gap: 24px;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
 }
 
-.diff-summary-impact-stat {
+.diff-summary-impact-card {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  padding: 12px 14px;
+  background: var(--diff-surface);
+  border-radius: 4px;
+  border: 1px solid var(--diff-border-subtle);
 }
 
 .diff-summary-impact-value {
-  font-size: 20px;
-  font-weight: 700;
+  font-size: 22px;
+  font-weight: 800;
+  font-family: var(--font-display);
   color: var(--text-primary);
+  letter-spacing: -0.3px;
+  font-variant-numeric: tabular-nums;
 }
 
 .diff-summary-impact-value.broken {
-  color: #ef4444;
+  color: var(--diff-red);
 }
 
 .diff-summary-impact-value.new {
-  color: #22c55e;
+  color: var(--diff-green);
 }
 
 .diff-summary-impact-label {
+  font-family: var(--font-display);
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   File Changes Section
+   ═══════════════════════════════════════════════════════════ */
+.diff-summary-files {
+  margin-top: 4px;
+  padding-top: 16px;
+  border-top: 1px solid var(--diff-border-subtle);
+}
+
+.diff-summary-files-title {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.diff-summary-files-title::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--diff-amber);
+  box-shadow: 0 0 8px rgba(251, 191, 36, 0.4);
+}
+
+.diff-summary-files-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.diff-file-group {
+  background: var(--diff-surface);
+  border-radius: 4px;
+  border: 1px solid var(--diff-border-subtle);
+  overflow: hidden;
+}
+
+.diff-file-group-header {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--diff-border-subtle);
+}
+
+.diff-file-group-list {
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.diff-file-group-item {
+  font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-secondary);
+  padding: 5px 12px;
+  border-left: 3px solid transparent;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diff-file-group-item:hover {
+  background: rgba(51, 65, 85, 0.3);
+  color: var(--text-primary);
 }
